@@ -3,3 +3,13 @@ config.enc
 secret.key
 .env
 secrets.toml
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+*.env
+venv/
+.secret/
+*.log
+.DS_Store
