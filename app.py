@@ -14,7 +14,7 @@ from utils import get_report_dataframe, apply_custom_categories
 from config import load_config, save_config
 from typing import Dict, Any, Optional
 
-.
+
 # --- Streamlit App Configuration ---
 st.set_page_config(
     page_title="ZugaBooks",

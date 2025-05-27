@@ -7,6 +7,8 @@
 #
 # This module implements an ANSI-C style lexical preprocessor for PLY.
 # -----------------------------------------------------------------------------
+from __future__ import generators
+
 import sys
 
 # Some Python 3 compatibility shims
