@@ -1,2 +1,2 @@
-python3 -m pip install intuit-oauth-client
-python3 -m pip install python-quickbooks
+libgl1-mesa-glx
+libglib2.0-0
