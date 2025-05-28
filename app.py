@@ -115,7 +115,7 @@ class QBTokenManager:
         return True
     
     def _start_oauth_flow(self) -> None:
-        """Initiate authorization"""streamlit/config.toml
+        """Initiate authorization"""
 
         auth_url = self.auth_client.get_authorization_url([Scopes.ACCOUNTING])
         st.markdown(f"""
