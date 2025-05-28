@@ -99,7 +99,8 @@ class QBTokenManager:
             client_id=self.cfg.get("qb_client_id", ""),
             client_secret=self.cfg.get("qb_client_secret", ""),
             environment="production",
-            redirect_uri="https://ZugaBooks.streamlit.app/callback",
+            redirect_uri="https://zugabooks.onrender.com
+",
             realm_id=self.cfg.get("realm_id", "")
         )
         
@@ -116,6 +117,7 @@ class QBTokenManager:
     
     def _start_oauth_flow(self) -> None:
         """Initiate authorization"""
+
         auth_url = self.auth_client.get_authorization_url([Scopes.ACCOUNTING])
         st.markdown(f"""
             <div style="text-align: center; margin: 20px;">

@@ -44,8 +44,9 @@ IF NOT EXIST "sa.json" (
     EXIT /B 1
 )
 
-REM Run Streamlit app
+REM Run Streamlit app and keep window open
 echo Launching ZugaBooks app...
-streamlit run app.py
+start "" http://localhost:8501
+cmd /k "streamlit run app.py"
 
 ENDLOCAL
