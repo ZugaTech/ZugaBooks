@@ -99,8 +99,7 @@ class QBTokenManager:
             client_id=self.cfg.get("qb_client_id", ""),
             client_secret=self.cfg.get("qb_client_secret", ""),
             environment="production",
-            redirect_uri="https://zugabooks.onrender.com
-",
+            redirect_uri="https://zugabooks.onrender.com",
             realm_id=self.cfg.get("realm_id", "")
         )
         
@@ -116,7 +115,7 @@ class QBTokenManager:
         return True
     
     def _start_oauth_flow(self) -> None:
-        """Initiate authorization"""
+        """Initiate authorization"""streamlit/config.toml
 
         auth_url = self.auth_client.get_authorization_url([Scopes.ACCOUNTING])
         st.markdown(f"""
