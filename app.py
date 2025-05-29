@@ -33,7 +33,7 @@ if not APP_PASSWORD:
 # --- PASSWORD PROTECTION ---
 def password_gate():
     st.sidebar.title("🔐 Login Required")
-    pw = st.sidebar.text_input("Enter Access Password", type="password")
+    pw = st.sidebar.text_input("Enter Access Password", type="password", key="password_gate")
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
 
@@ -59,23 +59,27 @@ def credential_manager():
             "QuickBooks Client ID",
             type="password",
             value=cfg.get("qb_client_id",""),
-            help="From Intuit Developer Portal"
+            help="From Intuit Developer Portal",
+            key="qb_client_id"
         )
         new_client_secret = st.text_input(
             "QuickBooks Client Secret",
             type="password",
-            value=cfg.get("qb_client_secret","")
+            value=cfg.get("qb_client_secret",""),
+            key="qb_client_secret"
         )
         new_redirect_uri = st.text_input(
             "QuickBooks Redirect URI",
             value=cfg.get("redirect_uri",""),
-            help="Must exactly match Intuit app settings"
+            help="Must exactly match Intuit app settings",
+            key="qb_redirect_uri"
         )
         new_realm_id = st.text_input(
             "QuickBooks Realm ID",
             type="password",
             value=cfg.get("realm_id",""),
-            help="Your QuickBooks Company ID"
+            help="Your QuickBooks Company ID",
+            key="qb_realm_id"
         )
 
         # Google Sheets
@@ -83,17 +87,19 @@ def credential_manager():
             "Google Sheet ID",
             type="password",
             value=cfg.get("sheet_id",""),
-            help="From your Google Sheets URL"
+            help="From your Google Sheets URL",
+            key="sheet_id"
         )
 
         # Service account JSON
         sa_file = st.file_uploader(
             "Google Service Account JSON",
             type=["json"],
-            help="Download from Google Cloud Console"
+            help="Download from Google Cloud Console",
+            key="sa_file"
         )
 
-        if st.button("💾 Save All Credentials"):
+        if st.button("💾 Save All Credentials", key="save_credentials"):
             updated = False
             if new_client_id and new_client_id != cfg.get("qb_client_id"):
                 cfg["qb_client_id"] = new_client_id; updated = True
@@ -161,7 +167,7 @@ class QBTokenManager:
         st.markdown("### 🔗 Connect to QuickBooks")
         st.markdown(f"[Authorize QuickBooks]({url})", unsafe_allow_html=True)
 
-        code = st.text_input("Paste the 'code' from QuickBooks URL here")
+        code = st.text_input("Paste the 'code' from QuickBooks URL here", key="oauth_code")
         if not code:
             st.stop()
 
@@ -192,18 +198,21 @@ def main_dashboard():
     today = date.today()
     c1, c2 = st.columns(2)
     with c1:
-        start = st.date_input("Start Date", today - timedelta(days=30))
+        start = st.date_input("Start Date", today - timedelta(days=30), key="start_date")
     with c2:
-        end = st.date_input("End Date", today)
+        end = st.date_input("End Date", today, key="end_date")
     if start > end:
         st.error("End date must be after start date"); st.stop()
 
-    report_type = st.selectbox("Select Report Type",
-                               ["ProfitAndLoss","BalanceSheet","TransactionList"])
+    report_type = st.selectbox(
+        "Select Report Type",
+        ["ProfitAndLoss","BalanceSheet","TransactionList"],
+        key="report_type"
+    )
 
     # CSV custom categories
     mapping_file = st.sidebar.file_uploader(
-        "Upload CSV mapping: Vendor → Category", type=["csv"]
+        "Upload CSV mapping: Vendor → Category", type=["csv"], key="mapping_file"
     )
     cat_map = {}
     if mapping_file:
@@ -213,7 +222,7 @@ def main_dashboard():
         else:
             st.sidebar.warning("CSV needs 'Vendor' & 'Category' columns.")
 
-    if st.button("🔄 Generate Report"):
+    if st.button("🔄 Generate Report", key="generate_report"):
         with st.spinner("📡 Fetching report..."):
             try:
                 qb = QuickBooks(
@@ -233,7 +242,7 @@ def main_dashboard():
                 st.dataframe(df, use_container_width=True)
 
                 # Export to Google Sheets
-                if st.button("📤 Export to Google Sheets"):
+                if st.button("📤 Export to Google Sheets", key="export_sheets"):
                     scope = [
                         "https://spreadsheets.google.com/feeds",
                         "https://www.googleapis.com/auth/drive"
@@ -252,11 +261,9 @@ def main_dashboard():
                             cols=len(df.columns)
                         )
                     ws.clear()
-                    ws.update(
-                        'A1',
-                        [df.columns.tolist()] + df.values.tolist(),
-                        value_input_option='USER_ENTERED'
-                    )
+                    ws.update('A1',
+                              [df.columns.tolist()] + df.values.tolist(),
+                              value_input_option='USER_ENTERED')
                     st.success("✅ Exported to Google Sheets")
 
                 # Download CSV
@@ -264,7 +271,8 @@ def main_dashboard():
                     "💾 Download CSV",
                     data=df.to_csv(index=False),
                     file_name=f"{report_type}_{date.today()}.csv",
-                    mime="text/csv"
+                    mime="text/csv",
+                    key="download_csv"
                 )
 
             except Exception as e:
