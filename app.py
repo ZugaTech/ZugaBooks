@@ -13,6 +13,8 @@ from cryptography.fernet import Fernet
 from utils import get_report_dataframe, apply_custom_categories
 from config import load_config, save_config
 from typing import Dict, Any
+from intuitlib.exceptions import AuthClientError  # For specific error handling
+
 
 # --- Streamlit App Config ---
 st.set_page_config(
@@ -125,42 +127,51 @@ def credential_manager():
 class QBTokenManager:
     def __init__(self):
         self.cfg = load_config()
-        # Must have redirect_uri set
         self.auth_client = AuthClient(
-            client_id=self.cfg.get("qb_client_id",""),
-            client_secret=self.cfg.get("qb_client_secret",""),
+            client_id=self.cfg.get("qb_client_id", ""),
+            client_secret=self.cfg.get("qb_client_secret", ""),
             environment="production",
-            redirect_uri=self.cfg.get("redirect_uri",""),
-            realm_id=self.cfg.get("realm_id","")
+            redirect_uri=self.cfg.get("redirect_uri", ""),
         )
 
     def handle_oauth(self) -> bool:
-        tokens = st.session_state.get("tokens", {})
+        # Initialize tokens if not exists
+        if "tokens" not in st.session_state:
+            st.session_state.tokens = {
+                "access_token": self.cfg.get("access_token", ""),
+                "refresh_token": self.cfg.get("refresh_token", ""),
+                "expires_at": self.cfg.get("expires_at", 0)
+            }
 
         # 1) Auto-refresh if expired
-        if tokens:
-            if time.time() > tokens.get("expires_at",0):
+        if st.session_state.tokens.get("refresh_token"):
+            if time.time() > st.session_state.tokens.get("expires_at", 0):
                 try:
-                    new_tokens = self.auth_client.refresh(tokens["refresh_token"])
+                    # Perform token refresh
+                    self.auth_client.refresh_token = st.session_state.tokens["refresh_token"]
+                    self.auth_client.realm_id = self.cfg.get("realm_id", "")
+                    new_tokens = self.auth_client.refresh()
+                    
+                    # Update session and config
                     st.session_state.tokens = {
-                        "access_token": new_tokens["accessToken"],
-                        "refresh_token": new_tokens["refreshToken"],
-                        "expires_at": time.time() + new_tokens.get("expires_in",3600)
+                        "access_token": new_tokens.access_token,
+                        "refresh_token": new_tokens.refresh_token,
+                        "expires_at": time.time() + new_tokens.expires_in
                     }
-                    # Save updated tokens
                     self.cfg.update({
-                        "access_token": new_tokens["accessToken"],
-                        "refresh_token": new_tokens["refreshToken"]
+                        "access_token": new_tokens.access_token,
+                        "refresh_token": new_tokens.refresh_token,
+                        "expires_at": st.session_state.tokens["expires_at"]
                     })
                     save_config(self.cfg)
-                    return True
-                except Exception:
-                    st.session_state.pop("tokens")
-                    st.warning("🔄 Session expired. Please re-authorize.")
-            else:
-                return True
+                    st.rerun()  # Refresh the app state
+                except Exception as e:
+                    st.warning(f"🔁 Token refresh failed: {str(e)}")
+                    st.session_state.pop("tokens", None)
+                    return False
+            return True
 
-        # 2) No valid tokens → Prompt OAuth
+        # 2) No valid tokens → Start OAuth flow
         url = self.auth_client.get_authorization_url([Scopes.ACCOUNTING])
         st.markdown("### 🔗 Connect to QuickBooks")
         st.markdown(f"[Authorize QuickBooks]({url})", unsafe_allow_html=True)
@@ -171,25 +182,31 @@ class QBTokenManager:
 
         # 3) Exchange code for tokens
         try:
-            clean = code.strip().split("&")[0].split("=")[-1]
-            new_tokens = self.auth_client.get_bearer_token(clean)
+            clean_code = code.strip().split("&")[0].split("=")[-1]
+            new_tokens = self.auth_client.get_bearer_token(clean_code)
+            
+            # Update session and config
             st.session_state.tokens = {
-                "access_token": new_tokens["accessToken"],
-                "refresh_token": new_tokens["refreshToken"],
-                "expires_at": time.time() + new_tokens.get("expires_in",3600)
+                "access_token": new_tokens.access_token,
+                "refresh_token": new_tokens.refresh_token,
+                "expires_at": time.time() + new_tokens.expires_in
             }
             self.cfg.update({
-                "realm_id": new_tokens.get("realmId", self.cfg.get("realm_id","")),
-                "access_token": new_tokens["accessToken"],
-                "refresh_token": new_tokens["refreshToken"]
+                "realm_id": self.auth_client.realm_id,
+                "access_token": new_tokens.access_token,
+                "refresh_token": new_tokens.refresh_token,
+                "expires_at": st.session_state.tokens["expires_at"]
             })
             save_config(self.cfg)
             st.success("✅ QuickBooks connected!")
+            time.sleep(1)
             st.rerun()
-        except Exception as e:
-            st.error(f"Authorization failed: {e}")
+        except AuthClientError as e:
+            st.error(f"🚨 QuickBooks API Error: {e.status_code} - {e.content}")
             st.stop()
-
+        except Exception as e:
+            st.error(f"🚨 Unexpected error: {str(e)}")
+            st.stop()
 # --- Main Dashboard ---
 def main_dashboard():
     st.title("📊 Financial Dashboard")
