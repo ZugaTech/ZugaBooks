@@ -32,7 +32,7 @@ def password_gate():
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
 
-    if pw and pw == if pw and pw == os.environ.get("APP_PASSWORD", st.secrets.get("APP_PASSWORD", "")):
+    if pw and pw == os.environ.get("APP_PASSWORD", st.secrets.get("APP_PASSWORD", "")):
         st.session_state.authenticated = True
         st.sidebar.success("✅ Access granted")
     elif pw:
