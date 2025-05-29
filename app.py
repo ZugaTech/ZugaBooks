@@ -14,6 +14,9 @@ from utils import get_report_dataframe, apply_custom_categories
 from config import load_config, save_config
 from typing import Dict, Any, Optional
 
+
+if "RENDER" in os.environ:  # Detect Render environment
+    os.environ["STREAMLIT_SECRETS_FILE"] = "/opt/render/project/src/.streamlit/secrets.toml"
 # --- Streamlit App Configuration ---
 st.set_page_config(
     page_title="ZugaBooks",
@@ -29,7 +32,7 @@ def password_gate():
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
 
-    if pw and pw == st.secrets.get("APP_PASSWORD"):
+    if pw and pw == if pw and pw == os.environ.get("APP_PASSWORD", st.secrets.get("APP_PASSWORD", "")):
         st.session_state.authenticated = True
         st.sidebar.success("✅ Access granted")
     elif pw:
