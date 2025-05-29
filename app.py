@@ -54,32 +54,32 @@ def credential_manager():
         st.markdown("### 🔑 API & OAuth Credentials")
         cfg = load_config()
 
-        # QuickBooks fields
+        # QuickBooks fields - FIXED KEYS
         new_client_id = st.text_input(
             "QuickBooks Client ID",
             type="password",
             value=cfg.get("qb_client_id",""),
             help="From Intuit Developer Portal",
-            key="qb_client_id"
+            key="qb_client_id_input"  # FIXED: Unique key
         )
         new_client_secret = st.text_input(
             "QuickBooks Client Secret",
             type="password",
             value=cfg.get("qb_client_secret",""),
-            key="qb_client_secret"
+            key="qb_client_secret_input"  # FIXED: Unique key
         )
         new_redirect_uri = st.text_input(
             "QuickBooks Redirect URI",
             value=cfg.get("redirect_uri",""),
             help="Must exactly match Intuit app settings",
-            key="qb_redirect_uri"
+            key="qb_redirect_uri_input"  # FIXED: Unique key
         )
         new_realm_id = st.text_input(
             "QuickBooks Realm ID",
             type="password",
             value=cfg.get("realm_id",""),
             help="Your QuickBooks Company ID",
-            key="qb_realm_id"
+            key="qb_realm_id_input"  # FIXED: Unique key
         )
 
         # Google Sheets
@@ -88,7 +88,7 @@ def credential_manager():
             type="password",
             value=cfg.get("sheet_id",""),
             help="From your Google Sheets URL",
-            key="sheet_id"
+            key="sheet_id_input"  # FIXED: Unique key
         )
 
         # Service account JSON
@@ -96,7 +96,7 @@ def credential_manager():
             "Google Service Account JSON",
             type=["json"],
             help="Download from Google Cloud Console",
-            key="sa_file"
+            key="sa_file_uploader"  # FIXED: Unique key
         )
 
         if st.button("💾 Save All Credentials", key="save_credentials"):
@@ -120,8 +120,6 @@ def credential_manager():
                 st.success("Credentials saved securely!")
             else:
                 st.warning("No changes detected")
-
-credential_manager()
 
 # --- QuickBooks Token Manager ---
 class QBTokenManager:
@@ -207,12 +205,12 @@ def main_dashboard():
     report_type = st.selectbox(
         "Select Report Type",
         ["ProfitAndLoss","BalanceSheet","TransactionList"],
-        key="report_type"
+        key="report_type_select"
     )
 
     # CSV custom categories
     mapping_file = st.sidebar.file_uploader(
-        "Upload CSV mapping: Vendor → Category", type=["csv"], key="mapping_file"
+        "Upload CSV mapping: Vendor → Category", type=["csv"], key="mapping_file_uploader"
     )
     cat_map = {}
     if mapping_file:
@@ -222,7 +220,7 @@ def main_dashboard():
         else:
             st.sidebar.warning("CSV needs 'Vendor' & 'Category' columns.")
 
-    if st.button("🔄 Generate Report", key="generate_report"):
+    if st.button("🔄 Generate Report", key="generate_report_btn"):
         with st.spinner("📡 Fetching report..."):
             try:
                 qb = QuickBooks(
@@ -242,7 +240,7 @@ def main_dashboard():
                 st.dataframe(df, use_container_width=True)
 
                 # Export to Google Sheets
-                if st.button("📤 Export to Google Sheets", key="export_sheets"):
+                if st.button("📤 Export to Google Sheets", key="export_sheets_btn"):
                     scope = [
                         "https://spreadsheets.google.com/feeds",
                         "https://www.googleapis.com/auth/drive"
@@ -272,7 +270,7 @@ def main_dashboard():
                     data=df.to_csv(index=False),
                     file_name=f"{report_type}_{date.today()}.csv",
                     mime="text/csv",
-                    key="download_csv"
+                    key="download_csv_btn"
                 )
 
             except Exception as e:
