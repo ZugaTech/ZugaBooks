@@ -69,15 +69,44 @@ def credential_manager():
     cfg = load_config()
     with st.sidebar.expander("🔧 Credentials & Settings", expanded=True):
         st.markdown("### QuickBooks & Google Sheets")
-        new_cid = st.text_input("QuickBooks Client ID", value=cfg.get("qb_client_id",""), type="password", key="qb_cid")
-        new_secret = st.text_input("QuickBooks Client Secret", value=cfg.get("qb_client_secret",""), type="password", key="qb_secret")
-        new_redirect = st.text_input("QuickBooks Redirect URI", value=cfg.get("redirect_uri",""), key="qb_redirect")
-        new_realm = st.text_input("QuickBooks Realm ID", value=cfg.get("realm_id",""), type="password", key="qb_realm")
-        new_sheet = st.text_input("Google Sheet ID", value=cfg.get("sheet_id",""), key="sheet_id")
-        sa_file = st.file_uploader("Service Account JSON", type=["json"], key="sa_file")
-        if st.button("💾 Save All Credentials", key="save_creds"):
+
+        new_cid = st.text_input(
+            "QuickBooks Client ID",
+            value=cfg.get("qb_client_id", ""),
+            type="password",
+            key="cred_qb_client_id"
+        )
+        new_secret = st.text_input(
+            "QuickBooks Client Secret",
+            value=cfg.get("qb_client_secret", ""),
+            type="password",
+            key="cred_qb_client_secret"
+        )
+        new_redirect = st.text_input(
+            "QuickBooks Redirect URI",
+            value=cfg.get("redirect_uri", ""),
+            key="cred_qb_redirect_uri"
+        )
+        new_realm = st.text_input(
+            "QuickBooks Realm ID",
+            value=cfg.get("realm_id", ""),
+            type="password",
+            key="cred_qb_realm_id"
+        )
+        new_sheet = st.text_input(
+            "Google Sheet ID",
+            value=cfg.get("sheet_id", ""),
+            key="cred_google_sheet_id"
+        )
+        sa_file = st.file_uploader(
+            "Service Account JSON",
+            type=["json"],
+            key="cred_sa_file_uploader"
+        )
+
+        if st.button("💾 Save All Credentials", key="cred_save_button"):
             updated = False
-            for k,v in [
+            for k, v in [
                 ("qb_client_id", new_cid),
                 ("qb_client_secret", new_secret),
                 ("redirect_uri", new_redirect),
@@ -85,9 +114,10 @@ def credential_manager():
                 ("sheet_id", new_sheet)
             ]:
                 if v and v != cfg.get(k):
-                    cfg[k] = v; updated = True
+                    cfg[k] = v
+                    updated = True
             if sa_file:
-                with open("service_account.json","wb") as f:
+                with open("service_account.json", "wb") as f:
                     f.write(sa_file.getbuffer())
                 updated = True
             if updated:
@@ -98,6 +128,7 @@ def credential_manager():
                 st.warning("Nothing changed")
 
 credential_manager()
+
 
 # ————————————————————————————————————————————————
 # … your imports, password_gate(), credential_manager() … 
@@ -113,7 +144,7 @@ if st.sidebar.button("🔄 Reset QuickBooks Authorization", key="reset_qb_auth")
         cfg.pop(k, None)
     save_config(cfg)
     st.experimental_rerun()
-    
+
 # OAuth + tokens
 class QBTokenManager:
     def __init__(self):
