@@ -21,13 +21,15 @@ from intuitlib.enums import Scopes
 from utils import get_report_dataframe, apply_custom_categories
 from config import load_config, save_config
 from intuitlib.exceptions import AuthClientError
-
-# now safe to import the cookie manager
 from streamlit_cookies_manager import EncryptedCookieManager
 
 # ————————————————————————————————————————————————
-# Cookie manager setup (remember-me for 24h)
-COOKIE_SECRET = st.secrets["general"]["COOKIE_SECRET"]
+# Cookie secret (24-hour “remember me”)
+COOKIE_SECRET = os.getenv("COOKIE_SECRET") or st.secrets.get("general", {}).get("COOKIE_SECRET")
+if not COOKIE_SECRET:
+    st.error("🔒 Missing COOKIE_SECRET—you must set COOKIE_SECRET as an env var or in .streamlit/secrets.toml")
+    st.stop()
+
 cookies = EncryptedCookieManager(
     prefix="zugabooks",
     password=COOKIE_SECRET
@@ -36,35 +38,35 @@ if not cookies.ready():
     st.stop()
 
 # ————————————————————————————————————————————————
-# Secure App Password
-APP_PASSWORD = os.getenv("APP_PASSWORD", "")
+# Secure App Password (once per 24h)
+APP_PASSWORD = os.getenv("APP_PASSWORD") or st.secrets.get("APP_PASSWORD", "")
 if not APP_PASSWORD:
-    try:
-        APP_PASSWORD = st.secrets["APP_PASSWORD"]
-    except KeyError:
-        APP_PASSWORD = ""
+    st.error("🔒 Missing APP_PASSWORD—you must set APP_PASSWORD as an env var or in .streamlit/secrets.toml")
+    st.stop()
 
 def password_gate():
-    last = cookies.get("last_auth_ts")
+    last_ts = cookies.get("last_auth_ts")
     now = int(time.time())
-    if last and now - int(last) < 24 * 3600:
-        return  # still valid
+    if last_ts and now - int(last_ts) < 24 * 3600:
+        return  # still within 24h, skip prompt
 
     st.sidebar.title("🔐 Login Required")
     pw = st.sidebar.text_input("Enter Access Password", type="password", key="password_gate")
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
 
-    if pw and APP_PASSWORD and pw == APP_PASSWORD:
+    if pw and pw == APP_PASSWORD:
         st.session_state.authenticated = True
         cookies["last_auth_ts"] = str(now)
         cookies.save()
-        st.sidebar.success("✅ Access granted — you won't be asked again for 24h")
+        st.sidebar.success("✅ Access granted — you won't be asked again for 24 h")
         return
     elif pw:
         st.sidebar.error("❌ Incorrect password")
 
     st.stop()
+
+password_gate()
 
 password_gate()
 
