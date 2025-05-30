@@ -206,7 +206,7 @@ class QBTokenManager:
             return True
 
         # 2) Check for authorization code in URL
-        params = st.experimental_get_query_params()
+        params = st.query_params()
         if params.get("code"):
             st.session_state["qb_code"] = params["code"][0]
             st.experimental_rerun()
