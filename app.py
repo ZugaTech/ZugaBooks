@@ -100,6 +100,20 @@ def credential_manager():
 credential_manager()
 
 # ————————————————————————————————————————————————
+# … your imports, password_gate(), credential_manager() … 
+
+credential_manager()
+
+# ← Insert the Reset button here:
+if st.sidebar.button("🔄 Reset QuickBooks Authorization", key="reset_qb_auth"):
+    st.session_state.pop("tokens", None)
+    st.session_state.qb_auth_phase = "init"
+    cfg = load_config()
+    for k in ("access_token","refresh_token","expires_at","realm_id"):
+        cfg.pop(k, None)
+    save_config(cfg)
+    st.experimental_rerun()
+    
 # OAuth + tokens
 class QBTokenManager:
     def __init__(self):
