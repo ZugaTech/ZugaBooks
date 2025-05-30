@@ -128,6 +128,8 @@ credential_manager()
 
 # ————————————————————————————————————————————————
 # QuickBooks OAuth & Token Manager
+# ————————————————————————————————————————————————
+# QuickBooks OAuth & Token Manager (Fixed Implementation)
 class QBTokenManager:
     def __init__(self):
         self.cfg = load_config()
@@ -136,6 +138,13 @@ class QBTokenManager:
                     self.cfg.get("redirect_uri")]):
             st.error("❌ Please set QuickBooks credentials & redirect URI")
             st.stop()
+            
+        # Add debug output for credentials
+        st.sidebar.write("QB Credentials Status:")
+        st.sidebar.write(f"Client ID: {'✅' if self.cfg.get('qb_client_id') else '❌'}")
+        st.sidebar.write(f"Client Secret: {'✅' if self.cfg.get('qb_client_secret') else '❌'}")
+        st.sidebar.write(f"Redirect URI: {'✅' if self.cfg.get('redirect_uri') else '❌'}")
+            
         self.auth_client = AuthClient(
             client_id=self.cfg["qb_client_id"],
             client_secret=self.cfg["qb_client_secret"],
@@ -144,81 +153,134 @@ class QBTokenManager:
         )
 
     def handle_oauth(self):
+        # Initialize token state
         if "tokens" not in st.session_state:
-            toks = {}
+            st.session_state.tokens = {}
             if self.cfg.get("access_token"):
-                toks = dict(
-                    access_token=self.cfg["access_token"],
-                    refresh_token=self.cfg["refresh_token"],
-                    expires_at=self.cfg.get("expires_at",0)
-                )
-            st.session_state.tokens = toks
+                st.session_state.tokens = {
+                    "access_token": self.cfg["access_token"],
+                    "refresh_token": self.cfg["refresh_token"],
+                    "expires_at": self.cfg.get("expires_at", 0)
+                }
 
+        # Debug token state
+        with st.expander("🔍 Token State"):
+            st.json(st.session_state.tokens)
+            
         toks = st.session_state.tokens
 
-        # 1) auto-refresh if expired
+        # 1) Auto-refresh if token exists but is expired
         if toks.get("access_token"):
-            if time.time() > toks.get("expires_at",0):
+            if time.time() > toks.get("expires_at", 0):
                 try:
+                    st.write("🔄 Token expired - attempting refresh...")
                     self.auth_client.refresh_token = toks["refresh_token"]
-                    new = self.auth_client.refresh()
-                    if not hasattr(new,"access_token"):
-                        raise ValueError("Bad refresh response")
-                    toks = dict(
-                        access_token=new.access_token,
-                        refresh_token=new.refresh_token,
-                        expires_at=time.time()+new.expires_in
-                    )
-                    st.session_state.tokens = toks
-                    self.cfg.update(toks)
+                    new_tokens = self.auth_client.refresh()
+                    
+                    # Validate token response
+                    if not new_tokens or not hasattr(new_tokens, "access_token"):
+                        raise ValueError("Invalid token response from refresh")
+                    
+                    # Update tokens
+                    st.session_state.tokens = {
+                        "access_token": new_tokens.access_token,
+                        "refresh_token": new_tokens.refresh_token,
+                        "expires_at": time.time() + new_tokens.expires_in
+                    }
+                    
+                    # Save to config
+                    self.cfg.update({
+                        "access_token": new_tokens.access_token,
+                        "refresh_token": new_tokens.refresh_token,
+                        "expires_at": st.session_state.tokens["expires_at"]
+                    })
                     save_config(self.cfg)
-                except Exception:
-                    st.warning("🔄 Session expired—please re-authorize")
+                    
+                    st.success("✅ Token refreshed successfully!")
+                    time.sleep(1)
+                    st.experimental_rerun()
+                except Exception as e:
+                    st.error(f"🔴 Token refresh failed: {str(e)}")
                     st.session_state.tokens = {}
                     return False
             return True
 
-        # 2) grab code from URL
+        # 2) Check for authorization code in URL
         params = st.experimental_get_query_params()
         if params.get("code"):
             st.session_state["qb_code"] = params["code"][0]
+            st.experimental_rerun()
 
-        # 3) prompt for authorization
+        # 3) Show authorization prompt
         st.markdown("## Authorize QuickBooks")
         auth_url = self.auth_client.get_authorization_url([Scopes.ACCOUNTING])
-        st.markdown(f"[Authorize →]({auth_url})", unsafe_allow_html=True)
+        st.markdown(f"""
+            ### Steps:
+            1. [Click here to authorize]({auth_url})
+            2. Log in to QuickBooks and approve access
+            3. Copy the authorization code from the URL
+        """)
+        st.code(f"Redirect URL: {self.auth_client.redirect_uri}")
 
-        code = st.text_input("OAuth Code",
-                             value=st.session_state.get("qb_code",""),
+        code = st.text_input("Paste Authorization Code Here:", 
+                             value=st.session_state.get("qb_code", ""),
                              key="qb_auth_code")
+        
         if not code:
+            st.warning("Please complete the authorization steps")
             st.stop()
 
-        # 4) exchange for tokens
+        # 4) Exchange code for tokens
         try:
-            clean = code.strip().split("code=")[-1].split("&")[0]
-            tok = self.auth_client.get_bearer_token(clean)
-            if not tok or "access_token" not in tok:
-                raise ValueError("No tokens returned")
-            toks = dict(
-                access_token=tok["access_token"],
-                refresh_token=tok["refresh_token"],
-                expires_at=time.time()+tok.get("expires_in",3600)
-            )
-            st.session_state.tokens = toks
-            self.cfg.update(toks)
-            if "realmId" in tok:
-                self.cfg["realm_id"] = tok["realmId"]
+            clean_code = code.strip().split("code=")[-1].split("&")[0]
+            st.write(f"ℹ️ Using code: {clean_code[:10]}...")
+            
+            # Get token response
+            token_response = self.auth_client.get_bearer_token(clean_code)
+            
+            # Validate token response
+            if not token_response or not hasattr(token_response, "access_token"):
+                raise ValueError("No tokens returned from QuickBooks API")
+                
+            # Store tokens
+            st.session_state.tokens = {
+                "access_token": token_response.access_token,
+                "refresh_token": token_response.refresh_token,
+                "expires_at": time.time() + token_response.expires_in
+            }
+            
+            # Update realm ID if available
+            if hasattr(self.auth_client, "realm_id") and self.auth_client.realm_id:
+                self.cfg["realm_id"] = self.auth_client.realm_id
+                
+            # Save tokens to config
+            self.cfg.update({
+                "access_token": token_response.access_token,
+                "refresh_token": token_response.refresh_token,
+                "expires_at": st.session_state.tokens["expires_at"]
+            })
             save_config(self.cfg)
-            st.success("✅ Connected!")
+            
+            st.success("✅ Authorization successful! Connecting to QuickBooks...")
+            time.sleep(2)
             st.experimental_rerun()
+            
         except AuthClientError as e:
-            st.error(f"🔴 QuickBooks API Error: {e.status_code} – {e.content}")
+            st.error(f"""
+                🔴 QuickBooks API Error:
+                Status: {e.status_code}
+                Content: {e.content}
+                Headers: {e.headers}
+            """)
             st.stop()
         except Exception as e:
-            st.error(f"🔴 Authorization failed: {e}")
+            st.error(f"""
+                🔴 Authorization failed: {str(e)}
+                Debug Info:
+                - Code used: {clean_code[:10]}...
+                - Token response type: {type(token_response)}
+            """)
             st.stop()
-
 # ————————————————————————————————————————————————
 # Main Dashboard
 def main_dashboard():
