@@ -130,232 +130,298 @@ credential_manager()
 # QuickBooks OAuth & Token Manager
 # ————————————————————————————————————————————————
 # QuickBooks OAuth & Token Manager (Fixed Implementation)
+# ————————————————————————————————————————————————
+# QuickBooks OAuth & Token Manager (Fixed with st.query_params)
 class QBTokenManager:
     def __init__(self):
         self.cfg = load_config()
-        if not all([self.cfg.get("qb_client_id"),
-                    self.cfg.get("qb_client_secret"),
-                    self.cfg.get("redirect_uri")]):
-            st.error("❌ Please set QuickBooks credentials & redirect URI")
-            st.stop()
-            
-        # Add debug output for credentials
-        st.sidebar.write("QB Credentials Status:")
-        st.sidebar.write(f"Client ID: {'✅' if self.cfg.get('qb_client_id') else '❌'}")
-        st.sidebar.write(f"Client Secret: {'✅' if self.cfg.get('qb_client_secret') else '❌'}")
-        st.sidebar.write(f"Redirect URI: {'✅' if self.cfg.get('redirect_uri') else '❌'}")
-            
+        self._verify_credentials()
         self.auth_client = AuthClient(
             client_id=self.cfg["qb_client_id"],
             client_secret=self.cfg["qb_client_secret"],
             environment="production",
             redirect_uri=self.cfg["redirect_uri"]
         )
+        self._init_session_state()
+        st.query_params()  # Initialize query params
 
-    def handle_oauth(self):
-        # Initialize token state
-        if "tokens" not in st.session_state:
-            st.session_state.tokens = {}
-            if self.cfg.get("access_token"):
-                st.session_state.tokens = {
-                    "access_token": self.cfg["access_token"],
-                    "refresh_token": self.cfg["refresh_token"],
-                    "expires_at": self.cfg.get("expires_at", 0)
-                }
+    def _verify_credentials(self):
+        """Hard validation of required credentials"""
+        missing = []
+        for field in ['qb_client_id', 'qb_client_secret', 'redirect_uri']:
+            if not self.cfg.get(field):
+                missing.append(field)
+        if missing:
+            st.error(f"❌ Missing required config: {', '.join(missing)}")
+            st.stop()
 
-        # Debug token state
-        with st.expander("🔍 Token State"):
-            st.json(st.session_state.tokens)
-            
-        toks = st.session_state.tokens
+    def _init_session_state(self):
+        """Initialize all required session state variables"""
+        defaults = {
+            'qb_auth_phase': 'init',  # init → code_exchange → complete
+            'tokens': {
+                'access_token': self.cfg.get('access_token'),
+                'refresh_token': self.cfg.get('refresh_token'),
+                'expires_at': self.cfg.get('expires_at', 0)
+            }
+        }
+        
+        for key, value in defaults.items():
+            if key not in st.session_state:
+                st.session_state[key] = value
 
-        # 1) Auto-refresh if token exists but is expired
-        if toks.get("access_token"):
-            if time.time() > toks.get("expires_at", 0):
-                try:
-                    st.write("🔄 Token expired - attempting refresh...")
-                    self.auth_client.refresh_token = toks["refresh_token"]
-                    new_tokens = self.auth_client.refresh()
-                    
-                    # Validate token response
-                    if not new_tokens or not hasattr(new_tokens, "access_token"):
-                        raise ValueError("Invalid token response from refresh")
-                    
-                    # Update tokens
-                    st.session_state.tokens = {
-                        "access_token": new_tokens.access_token,
-                        "refresh_token": new_tokens.refresh_token,
-                        "expires_at": time.time() + new_tokens.expires_in
-                    }
-                    
-                    # Save to config
-                    self.cfg.update({
-                        "access_token": new_tokens.access_token,
-                        "refresh_token": new_tokens.refresh_token,
-                        "expires_at": st.session_state.tokens["expires_at"]
-                    })
-                    save_config(self.cfg)
-                    
-                    st.success("✅ Token refreshed successfully!")
-                    time.sleep(1)
-                    st.experimental_rerun()
-                except Exception as e:
-                    st.error(f"🔴 Token refresh failed: {str(e)}")
-                    st.session_state.tokens = {}
-                    return False
+    def handle_oauth(self) -> bool:
+        """Main OAuth handler with guaranteed state progression"""
+        # 1. Debug view (temporary)
+        with st.expander("Auth State", expanded=False):
+            st.json({
+                "phase": st.session_state.qb_auth_phase,
+                "tokens": {k: "****" if "token" in k else v 
+                          for k,v in st.session_state.tokens.items()}
+            })
+
+        # 2. Check for valid tokens
+        if self._has_valid_tokens():
             return True
+            
+        # 3. State machine for OAuth flow
+        if st.session_state.qb_auth_phase == 'init':
+            self._start_authorization()
+        elif st.session_state.qb_auth_phase == 'code_exchange':
+            self._exchange_authorization_code()
+            
+        st.info("🔒 QuickBooks authorization in progress...")
+        st.stop()
 
-        # 2) Check for authorization code in URL
+    def _has_valid_tokens(self) -> bool:
+        """Check if valid tokens exist and refresh if needed"""
+        tokens = st.session_state.tokens
+        
+        # No tokens available
+        if not tokens.get('access_token'):
+            return False
+            
+        # Token expired - try refresh
+        if time.time() > tokens.get('expires_at', 0):
+            try:
+                st.write("🔄 Refreshing expired token...")
+                new_tokens = self._refresh_tokens(tokens['refresh_token'])
+                
+                # Update state
+                st.session_state.tokens = new_tokens
+                st.session_state.qb_auth_phase = 'complete'
+                
+                # Persist to config
+                self.cfg.update(new_tokens)
+                save_config(self.cfg)
+                
+                st.success("✅ Token refreshed successfully!")
+                time.sleep(1)
+                st.rerun()
+            except Exception as e:
+                st.error(f"🔴 Token refresh failed: {str(e)}")
+                return False
+        return True
+
+    def _start_authorization(self):
+        """Phase 1: Initiate OAuth flow"""
+        # Check for callback in URL
         params = st.query_params()
-        if params.get("code"):
-            st.session_state["qb_code"] = params["code"][0]
-            st.experimental_rerun()
-
-        # 3) Show authorization prompt
-        st.markdown("## Authorize QuickBooks")
+        if 'code' in params:
+            st.session_state.qb_auth_phase = 'code_exchange'
+            st.session_state.qb_code = params['code'][0]
+            st.rerun()
+            
+        # Show authorization prompt
+        st.markdown("## 🔑 QuickBooks Authorization")
         auth_url = self.auth_client.get_authorization_url([Scopes.ACCOUNTING])
+        
         st.markdown(f"""
             ### Steps:
             1. [Click here to authorize]({auth_url})
             2. Log in to QuickBooks and approve access
-            3. Copy the authorization code from the URL
+            3. You'll be redirected back to this app
         """)
-        st.code(f"Redirect URL: {self.auth_client.redirect_uri}")
-
-        code = st.text_input("Paste Authorization Code Here:", 
-                             value=st.session_state.get("qb_code", ""),
-                             key="qb_auth_code")
         
-        if not code:
-            st.warning("Please complete the authorization steps")
-            st.stop()
+        st.info(f"**Redirect URI:** `{self.auth_client.redirect_uri}`")
 
-        # 4) Exchange code for tokens
+    def _exchange_authorization_code(self):
+        """Phase 2: Exchange code for tokens"""
+        if 'qb_code' not in st.session_state:
+            st.error("Authorization code missing")
+            st.session_state.qb_auth_phase = 'init'
+            st.rerun()
+
         try:
-            clean_code = code.strip().split("code=")[-1].split("&")[0]
-            st.write(f"ℹ️ Using code: {clean_code[:10]}...")
+            code = st.session_state.qb_code
+            clean_code = code.split('code=')[-1].split('&')[0].strip()
+            st.write(f"ℹ️ Exchanging authorization code: {clean_code[:8]}...")
             
-            # Get token response
+            # Get tokens
             token_response = self.auth_client.get_bearer_token(clean_code)
             
-            # Validate token response
-            if not token_response or not hasattr(token_response, "access_token"):
-                raise ValueError("No tokens returned from QuickBooks API")
+            # Validate response
+            if not token_response or not hasattr(token_response, 'access_token'):
+                raise ValueError("Invalid token response from QuickBooks")
                 
             # Store tokens
-            st.session_state.tokens = {
-                "access_token": token_response.access_token,
-                "refresh_token": token_response.refresh_token,
-                "expires_at": time.time() + token_response.expires_in
+            new_tokens = {
+                'access_token': token_response.access_token,
+                'refresh_token': token_response.refresh_token,
+                'expires_at': time.time() + token_response.expires_in
             }
             
-            # Update realm ID if available
-            if hasattr(self.auth_client, "realm_id") and self.auth_client.realm_id:
-                self.cfg["realm_id"] = self.auth_client.realm_id
+            # Update state
+            st.session_state.tokens = new_tokens
+            st.session_state.qb_auth_phase = 'complete'
+            
+            # Save realm ID if available
+            if hasattr(self.auth_client, 'realm_id') and self.auth_client.realm_id:
+                self.cfg['realm_id'] = self.auth_client.realm_id
                 
-            # Save tokens to config
-            self.cfg.update({
-                "access_token": token_response.access_token,
-                "refresh_token": token_response.refresh_token,
-                "expires_at": st.session_state.tokens["expires_at"]
-            })
+            # Persist tokens
+            self.cfg.update(new_tokens)
             save_config(self.cfg)
             
-            st.success("✅ Authorization successful! Connecting to QuickBooks...")
+            # Clear URL parameters
+            st.query_params.clear()
+            
+            st.success("✅ Authorization successful! Loading dashboard...")
             time.sleep(2)
-            st.experimental_rerun()
+            st.rerun()
             
         except AuthClientError as e:
             st.error(f"""
                 🔴 QuickBooks API Error:
                 Status: {e.status_code}
-                Content: {e.content}
-                Headers: {e.headers}
+                {e.content}
             """)
-            st.stop()
+            st.session_state.qb_auth_phase = 'init'
+            st.rerun()
         except Exception as e:
-            st.error(f"""
-                🔴 Authorization failed: {str(e)}
-                Debug Info:
-                - Code used: {clean_code[:10]}...
-                - Token response type: {type(token_response)}
-            """)
-            st.stop()
+            st.error(f"🔴 Authorization failed: {str(e)}")
+            st.session_state.qb_auth_phase = 'init'
+            st.rerun()
+
+    def _refresh_tokens(self, refresh_token: str) -> dict:
+        """Refresh access tokens using refresh token"""
+        self.auth_client.refresh_token = refresh_token
+        new_tokens = self.auth_client.refresh()
+        
+        if not new_tokens or not hasattr(new_tokens, 'access_token'):
+            raise ValueError("Invalid refresh token response")
+            
+        return {
+            'access_token': new_tokens.access_token,
+            'refresh_token': new_tokens.refresh_token,
+            'expires_at': time.time() + new_tokens.expires_in
+        }
+
+
 # ————————————————————————————————————————————————
 # Main Dashboard
 def main_dashboard():
     st.title("📊 Financial Dashboard")
     today = date.today()
-    c1, c2 = st.columns(2)
-    with c1:
-        start = st.date_input("Start Date", today - timedelta(days=30), key="start")
-    with c2:
-        end = st.date_input("End Date", today, key="end")
-    if start > end:
-        st.error("End date must be after start"); st.stop()
 
-    rpt = st.selectbox("Report Type",
-                       ["ProfitAndLoss","BalanceSheet","TransactionList"],
-                       key="rpt")
+    col1, col2 = st.columns(2)
+    with col1:
+        start_date = st.date_input("Start Date", today - timedelta(days=30), key="start")
+    with col2:
+        end_date = st.date_input("End Date", today, key="end")
 
-    m = st.sidebar.file_uploader("CSV: Vendor → Category",
-                                 type=["csv"], key="map")
-    cat_map = {}
-    if m:
-        dfm = pd.read_csv(m)
-        if {'Vendor','Category'}.issubset(dfm.columns):
-            cat_map = dict(zip(dfm['Vendor'], dfm['Category']))
+    if start_date > end_date:
+        st.error("⚠️ End date must be after start date.")
+        st.stop()
+
+    report_type = st.selectbox(
+        "Select Report Type",
+        ["ProfitAndLoss", "BalanceSheet", "TransactionList"],
+        key="report_type"
+    )
+
+    # Optional CSV mapping file
+    mapping_file = st.sidebar.file_uploader("CSV: Vendor → Category", type=["csv"], key="vendor_mapping")
+    category_map = {}
+    if mapping_file:
+        df_map = pd.read_csv(mapping_file)
+        if {'Vendor', 'Category'}.issubset(df_map.columns):
+            category_map = dict(zip(df_map['Vendor'], df_map['Category']))
         else:
-            st.sidebar.warning("CSV needs Vendor & Category")
+            st.sidebar.warning("❌ CSV must contain 'Vendor' and 'Category' columns.")
 
-    if st.button("🔄 Generate Report", key="gen"):
-        with st.spinner("Fetching..."):
+    if st.button("🔄 Generate Report", key="generate_report"):
+        with st.spinner("📡 Fetching data from QuickBooks..."):
             try:
                 qb = QuickBooks(
                     auth_client=token_manager.auth_client,
                     access_token=st.session_state.tokens["access_token"],
                     refresh_token=st.session_state.tokens["refresh_token"],
-                    company_id=token_manager.cfg.get("realm_id","")
+                    company_id=token_manager.cfg.get("realm_id", "")
                 )
+
                 params = {
-                    "start_date": start.strftime("%Y-%m-%d"),
-                    "end_date":   end.strftime("%Y-%m-%d")
+                    "start_date": start_date.strftime("%Y-%m-%d"),
+                    "end_date": end_date.strftime("%Y-%m-%d")
                 }
-                rep = qb.get_report(report_name=rpt, params=params)
-                df = get_report_dataframe(rep.get("Rows",{}).get("Row",[]), rpt)
-                if cat_map:
-                    df = apply_custom_categories(df, m)
+
+                report = qb.get_report(report_name=report_type, params=params)
+                rows = report.get("Rows", {}).get("Row", [])
+                df = get_report_dataframe(rows, report_type)
+
+                if category_map:
+                    df = apply_custom_categories(df, mapping_file)
+
+                st.subheader(f"{report_type} Report")
                 st.dataframe(df, use_container_width=True)
 
-                if st.button("📤 Export to Sheets", key="exp"):
+                # Export to Google Sheets
+                if st.button("📤 Export to Google Sheets", key="export_sheets"):
                     scope = [
                         "https://spreadsheets.google.com/feeds",
                         "https://www.googleapis.com/auth/drive"
                     ]
                     creds = ServiceAccountCredentials.from_json_keyfile_name(
-                        "service_account.json", scope)
+                        "service_account.json", scope
+                    )
                     gc = gspread.authorize(creds)
-                    sht = gc.open_by_key(load_config().get("sheet_id",""))
+                    sheet = gc.open_by_key(load_config().get("sheet_id", ""))
                     try:
-                        ws = sht.worksheet(rpt)
-                    except:
-                        ws = sht.add_worksheet(
-                            title=rpt, rows=len(df)+1, cols=len(df.columns))
-                    ws.clear()
-                    ws.update("A1",
-                              [df.columns.tolist()]+df.values.tolist(),
-                              value_input_option="USER_ENTERED")
-                    st.success("✅ Exported")
+                        worksheet = sheet.worksheet(report_type)
+                    except gspread.exceptions.WorksheetNotFound:
+                        worksheet = sheet.add_worksheet(
+                            title=report_type,
+                            rows=len(df) + 1,
+                            cols=len(df.columns)
+                        )
+                    worksheet.clear()
+                    worksheet.update("A1", [df.columns.tolist()] + df.values.tolist(), value_input_option="USER_ENTERED")
+                    st.success("✅ Successfully exported to Google Sheets!")
 
-                st.download_button("💾 CSV",
-                                   data=df.to_csv(index=False),
-                                   file_name=f"{rpt}_{today}.csv",
-                                   key="dl")
+                # Download CSV
+                st.download_button(
+                    label="💾 Download CSV",
+                    data=df.to_csv(index=False),
+                    file_name=f"{report_type}_{today}.csv",
+                    mime="text/csv",
+                    key="download_csv"
+                )
+
             except Exception as e:
-                st.error(f"Failed: {e}")
+                st.error(f"❌ Report generation failed: {e}")
+                
 
 # ————————————————————————————————————————————————
+# App Entry Point
 if __name__ == "__main__":
     token_manager = QBTokenManager()
+
+    # Status UI
+    if st.session_state.get("tokens", {}).get("access_token"):
+        st.sidebar.success("✅ Connected to QuickBooks")
+    else:
+        st.sidebar.warning("🔴 Not connected to QuickBooks")
+
+    # Run dashboard only if authenticated
     if token_manager.handle_oauth():
         main_dashboard()
