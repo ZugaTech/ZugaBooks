@@ -133,8 +133,6 @@ credential_manager()
 # ————————————————————————————————————————————————
 # … your imports, password_gate(), credential_manager() … 
 
-credential_manager()
-
 # ← Insert the Reset button here:
 if st.sidebar.button("🔄 Reset QuickBooks Authorization", key="reset_qb_auth"):
     st.session_state.pop("tokens", None)
