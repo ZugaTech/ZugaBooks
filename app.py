@@ -143,36 +143,28 @@ class QBTokenManager:
             redirect_uri=self.cfg["redirect_uri"]
         )
         self._init_session_state()
-        st.query_params()  # Initialize query params
+        self.params = st.query_params  # ✅ Fixed: query_params is not callable
 
     def _verify_credentials(self):
-        """Hard validation of required credentials"""
-        missing = []
-        for field in ['qb_client_id', 'qb_client_secret', 'redirect_uri']:
-            if not self.cfg.get(field):
-                missing.append(field)
+        missing = [f for f in ['qb_client_id', 'qb_client_secret', 'redirect_uri'] if not self.cfg.get(f)]
         if missing:
             st.error(f"❌ Missing required config: {', '.join(missing)}")
             st.stop()
 
     def _init_session_state(self):
-        """Initialize all required session state variables"""
         defaults = {
-            'qb_auth_phase': 'init',  # init → code_exchange → complete
+            'qb_auth_phase': 'init',
             'tokens': {
                 'access_token': self.cfg.get('access_token'),
                 'refresh_token': self.cfg.get('refresh_token'),
                 'expires_at': self.cfg.get('expires_at', 0)
             }
         }
-        
         for key, value in defaults.items():
             if key not in st.session_state:
                 st.session_state[key] = value
 
     def handle_oauth(self) -> bool:
-        """Main OAuth handler with guaranteed state progression"""
-        # 1. Debug view (temporary)
         with st.expander("Auth State", expanded=False):
             st.json({
                 "phase": st.session_state.qb_auth_phase,
@@ -180,41 +172,29 @@ class QBTokenManager:
                           for k,v in st.session_state.tokens.items()}
             })
 
-        # 2. Check for valid tokens
         if self._has_valid_tokens():
             return True
-            
-        # 3. State machine for OAuth flow
+
         if st.session_state.qb_auth_phase == 'init':
             self._start_authorization()
         elif st.session_state.qb_auth_phase == 'code_exchange':
             self._exchange_authorization_code()
-            
+
         st.info("🔒 QuickBooks authorization in progress...")
         st.stop()
 
     def _has_valid_tokens(self) -> bool:
-        """Check if valid tokens exist and refresh if needed"""
         tokens = st.session_state.tokens
-        
-        # No tokens available
         if not tokens.get('access_token'):
             return False
-            
-        # Token expired - try refresh
         if time.time() > tokens.get('expires_at', 0):
             try:
                 st.write("🔄 Refreshing expired token...")
                 new_tokens = self._refresh_tokens(tokens['refresh_token'])
-                
-                # Update state
                 st.session_state.tokens = new_tokens
                 st.session_state.qb_auth_phase = 'complete'
-                
-                # Persist to config
                 self.cfg.update(new_tokens)
                 save_config(self.cfg)
-                
                 st.success("✅ Token refreshed successfully!")
                 time.sleep(1)
                 st.rerun()
@@ -224,29 +204,22 @@ class QBTokenManager:
         return True
 
     def _start_authorization(self):
-        """Phase 1: Initiate OAuth flow"""
-        # Check for callback in URL
-        params = st.query_params()
-        if 'code' in params:
+        if 'code' in self.params:
             st.session_state.qb_auth_phase = 'code_exchange'
-            st.session_state.qb_code = params['code'][0]
+            st.session_state.qb_code = self.params['code'][0]
             st.rerun()
-            
-        # Show authorization prompt
+
         st.markdown("## 🔑 QuickBooks Authorization")
         auth_url = self.auth_client.get_authorization_url([Scopes.ACCOUNTING])
-        
         st.markdown(f"""
             ### Steps:
             1. [Click here to authorize]({auth_url})
             2. Log in to QuickBooks and approve access
             3. You'll be redirected back to this app
         """)
-        
         st.info(f"**Redirect URI:** `{self.auth_client.redirect_uri}`")
 
     def _exchange_authorization_code(self):
-        """Phase 2: Exchange code for tokens"""
         if 'qb_code' not in st.session_state:
             st.error("Authorization code missing")
             st.session_state.qb_auth_phase = 'init'
@@ -256,40 +229,32 @@ class QBTokenManager:
             code = st.session_state.qb_code
             clean_code = code.split('code=')[-1].split('&')[0].strip()
             st.write(f"ℹ️ Exchanging authorization code: {clean_code[:8]}...")
-            
-            # Get tokens
+
             token_response = self.auth_client.get_bearer_token(clean_code)
-            
-            # Validate response
             if not token_response or not hasattr(token_response, 'access_token'):
                 raise ValueError("Invalid token response from QuickBooks")
-                
-            # Store tokens
+
             new_tokens = {
                 'access_token': token_response.access_token,
                 'refresh_token': token_response.refresh_token,
                 'expires_at': time.time() + token_response.expires_in
             }
-            
-            # Update state
+
             st.session_state.tokens = new_tokens
             st.session_state.qb_auth_phase = 'complete'
-            
-            # Save realm ID if available
+
             if hasattr(self.auth_client, 'realm_id') and self.auth_client.realm_id:
                 self.cfg['realm_id'] = self.auth_client.realm_id
-                
-            # Persist tokens
+
             self.cfg.update(new_tokens)
             save_config(self.cfg)
-            
-            # Clear URL parameters
-            st.query_params.clear()
-            
+
+            # ⚠️ You can't use st.query_params.clear(), so we reset manually
+            st.experimental_set_query_params()  # clear URL params
             st.success("✅ Authorization successful! Loading dashboard...")
             time.sleep(2)
             st.rerun()
-            
+
         except AuthClientError as e:
             st.error(f"""
                 🔴 QuickBooks API Error:
@@ -304,19 +269,15 @@ class QBTokenManager:
             st.rerun()
 
     def _refresh_tokens(self, refresh_token: str) -> dict:
-        """Refresh access tokens using refresh token"""
         self.auth_client.refresh_token = refresh_token
         new_tokens = self.auth_client.refresh()
-        
         if not new_tokens or not hasattr(new_tokens, 'access_token'):
             raise ValueError("Invalid refresh token response")
-            
         return {
             'access_token': new_tokens.access_token,
             'refresh_token': new_tokens.refresh_token,
             'expires_at': time.time() + new_tokens.expires_in
         }
-
 
 # ————————————————————————————————————————————————
 # Main Dashboard
