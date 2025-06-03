@@ -13,3 +13,5 @@ venv/
 .secret/
 *.log
 .DS_Store
+service_account.json
+.streamlit/cache
