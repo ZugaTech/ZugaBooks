@@ -269,7 +269,7 @@ class QBTokenManager:
     def _start_authorization(self):
         """Phase 1: Initiate OAuth flow"""
         # Check for callback in URL using query_params
-        params = query_params.to_dict()
+        params = st.query_params
         if "code" in params:
             st.session_state.qb_code = params["code"]
             st.session_state.qb_auth_phase = "code_exchange"
