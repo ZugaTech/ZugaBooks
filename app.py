@@ -1,4 +1,12 @@
 import streamlit as st
+# ————————————————————————————————————————————————
+# MUST be the very first call
+st.set_page_config(
+    page_title="ZugaBooks",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 import os
 import time
 import json
@@ -19,15 +27,6 @@ from streamlit import cache_resource
 import streamlit as st
  
 
-
-# ————————————————————————————————————————————————
-# MUST be the very first call
-st.set_page_config(
-    page_title="ZugaBooks",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 
 # ————————————————————————————————————————————————
 # Cookie + “remember me” setup
