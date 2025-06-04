@@ -14,7 +14,7 @@ from utils import get_report_dataframe, apply_custom_categories
 from config import load_config, save_config
 from intuitlib.exceptions import AuthClientError
 from streamlit_cookies_manager import EncryptedCookieManager
-from streamlit import cache_data
+from streamlit import cache_data, query_params
 from streamlit import cache_resource
 import streamlit as st
  
