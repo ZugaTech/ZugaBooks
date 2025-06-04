@@ -14,7 +14,9 @@ from utils import get_report_dataframe, apply_custom_categories
 from config import load_config, save_config
 from intuitlib.exceptions import AuthClientError
 from streamlit_cookies_manager import EncryptedCookieManager
-from streamlit.runtime.caching import clear_cache
+from streamlit import cache_data
+from streamlit import cache_resource
+
 
 # ————————————————————————————————————————————————
 # MUST be the very first Streamlit call
@@ -67,7 +69,7 @@ def password_gate():
 password_gate()
 
 # ————————————————————————————————————————————————
-# Sidebar: credentials manager
+# # Sidebar: credentials manager
 def credential_manager():
     cfg = load_config()
     with st.sidebar.expander("🔧 Credentials & Settings", expanded=True):
@@ -103,7 +105,7 @@ def credential_manager():
         new_sheet = st.text_input(
             "Google Sheet ID",
             value=cfg.get("google_sheets", {}).get("sheet_id", ""),
-            help="From your Google Sheets URL",
+            help="From your Google Sheets URL (docs.google.com/spreadsheets/d/[THIS_IS_SHEET_ID]/edit)",
             key="cred_google_sheet_id"
         )
         sa_file = st.file_uploader(
@@ -141,12 +143,15 @@ def credential_manager():
                 updated = True
 
             if updated:
-                # Save to encrypted config
-                save_config(cfg)
+                # Save to both encrypted and plaintext (for emergency recovery)
+                save_config(cfg, force_plaintext=True)
                 st.success("✅ Configuration saved successfully!")
-                # Clear any caches (if used) and rerun
-                clear_cache()
-                st.experimental_rerun()
+                st.balloons()
+                
+                # Clear all caches and rerun
+                from streamlit import cache_data
+                cache_data.clear()
+                st.rerun()
             else:
                 st.warning("⚠️ No changes detected")
 
@@ -154,14 +159,15 @@ def credential_manager():
 with st.sidebar:
     if st.checkbox("🔍 Show Config Debug", False):
         from datetime import datetime
+        from pathlib import Path
         current_config = load_config()
         st.write("### Config Status")
         st.json({
             "source": "🔒 Encrypted" if Path("config.enc").exists() else "📄 Plaintext",
             "quickbooks_configured": bool(current_config.get("qb_client_id")),
             "google_sheets_configured": bool(current_config.get("google_sheets", {}).get("sheet_id")),
-            "last_modified": datetime.fromtimestamp(Path("config.enc").stat().st_mtime).isoformat()
-                            if Path("config.enc").exists() else "Never"
+            "last_modified": datetime.fromtimestamp(Path("config.enc").stat().st_mtime).isoformat() 
+                          if Path("config.enc").exists() else "Never"
         })
 
 credential_manager()
