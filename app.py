@@ -16,7 +16,8 @@ from intuitlib.exceptions import AuthClientError
 from streamlit_cookies_manager import EncryptedCookieManager
 from streamlit import cache_data
 from streamlit import cache_resource
-from streamlit import st, query_params  
+import streamlit as st
+ 
 
 
 # ————————————————————————————————————————————————
