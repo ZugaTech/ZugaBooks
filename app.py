@@ -16,10 +16,11 @@ from intuitlib.exceptions import AuthClientError
 from streamlit_cookies_manager import EncryptedCookieManager
 from streamlit import cache_data
 from streamlit import cache_resource
+from streamlit import st, query_params  
 
 
 # ————————————————————————————————————————————————
-# MUST be the very first Streamlit call
+# MUST be the very first call
 st.set_page_config(
     page_title="ZugaBooks",
     page_icon="📊",
@@ -177,12 +178,15 @@ credential_manager()
 class QBTokenManager:
     def __init__(self):
         self.cfg = load_config()
-        # Validate required fields
-        missing = [f for f in ("qb_client_id", "qb_client_secret", "redirect_uri") if not self.cfg.get(f)]
+        # Validate required credentials
+        missing = []
+        for field in ("qb_client_id", "qb_client_secret", "redirect_uri"):
+            if not self.cfg.get(field):
+                missing.append(field)
         if missing:
             st.error(f"❌ Missing required fields: {', '.join(missing)}")
             st.stop()
-
+            
         self.auth_client = AuthClient(
             client_id=self.cfg["qb_client_id"],
             client_secret=self.cfg["qb_client_secret"],
@@ -190,7 +194,7 @@ class QBTokenManager:
             redirect_uri=self.cfg["redirect_uri"]
         )
 
-        # Initialize session_state variables
+        # Initialize session state
         if "qb_auth_phase" not in st.session_state:
             st.session_state.qb_auth_phase = "init"
         if "tokens" not in st.session_state:
@@ -204,7 +208,7 @@ class QBTokenManager:
         # Debug view
         with st.expander("🔑 Auth State", expanded=False):
             st.json({
-                "phase": st.session_state.get("qb_auth_phase", ""),
+                "phase": st.session_state.qb_auth_phase,
                 "tokens": {
                     k: ("****" if "token" in k else v)
                     for k, v in st.session_state.tokens.items()
@@ -215,7 +219,7 @@ class QBTokenManager:
         if self._has_valid_tokens():
             return True
 
-        # 2) State machine
+        # 2) State machine handling
         if st.session_state.qb_auth_phase == "init":
             self._start_authorization()
         elif st.session_state.qb_auth_phase == "code_exchange":
@@ -228,24 +232,28 @@ class QBTokenManager:
         tokens = st.session_state.tokens
         if not tokens.get("access_token"):
             return False
-
-        # Refresh if expired
+            
+        # Check expiration
         if time.time() > tokens.get("expires_at", 0):
             try:
                 self.auth_client.refresh_token = tokens["refresh_token"]
                 new_tokens = self.auth_client.refresh()
+                
+                # Validate token response
                 if not new_tokens or not hasattr(new_tokens, "access_token"):
                     raise ValueError("Invalid token response")
-
+                    
+                # Update tokens
                 st.session_state.tokens = {
                     "access_token": new_tokens.access_token,
                     "refresh_token": new_tokens.refresh_token,
                     "expires_at": time.time() + new_tokens.expires_in
                 }
+                
                 # Persist to config
                 self.cfg.update(st.session_state.tokens)
                 save_config(self.cfg)
-
+                
                 st.session_state.qb_auth_phase = "complete"
                 st.success("✅ Token refreshed successfully!")
                 time.sleep(1)
@@ -255,20 +263,23 @@ class QBTokenManager:
                 st.warning(f"🔄 Token refresh failed: {str(e)}")
                 st.session_state.tokens = {}
                 return False
-
         return True
 
     def _start_authorization(self):
         """Phase 1: Initiate OAuth flow"""
-        params = st.query_params
+        # Check for callback in URL using query_params
+        params = query_params.to_dict()
         if "code" in params:
-            st.session_state.qb_code = params["code"][0]
+            st.session_state.qb_code = params["code"]
             st.session_state.qb_auth_phase = "code_exchange"
-            st.experimental_set_query_params()  # clear URL parameters
+            # Clear URL parameters by setting empty dict
+            query_params.clear()
             st.rerun()
-
+            
+        # Show authorization prompt
         st.markdown("## 🔑 QuickBooks Authorization")
         auth_url = self.auth_client.get_authorization_url([Scopes.ACCOUNTING])
+        
         st.markdown(f"""
             ### Steps:
             1. [Click here to authorize]({auth_url})
@@ -285,34 +296,39 @@ class QBTokenManager:
             st.rerun()
 
         try:
+            # Clean code (handle full URL or just code)
             clean_code = st.session_state.qb_code.split("code=")[-1].split("&")[0].strip()
-            st.write(f"ℹ️ Exchanging authorization code: {clean_code[:8]}...")
-
+            
+            # Get token response
             token_response = self.auth_client.get_bearer_token(clean_code)
+            
+            # Validate response
             if not token_response or not hasattr(token_response, "access_token"):
                 raise ValueError("No tokens returned from QuickBooks API")
-
+                
+            # Store tokens
             st.session_state.tokens = {
                 "access_token": token_response.access_token,
                 "refresh_token": token_response.refresh_token,
                 "expires_at": time.time() + token_response.expires_in
             }
-
+            
             # Update realm ID if available
             if hasattr(self.auth_client, "realm_id") and self.auth_client.realm_id:
                 self.cfg["realm_id"] = self.auth_client.realm_id
-
-            # Persist tokens
+                
+            # Save tokens to config
             self.cfg.update(st.session_state.tokens)
             save_config(self.cfg)
-
+            
+            # Clear temporary state
             st.session_state.qb_auth_phase = "complete"
             st.session_state.pop("qb_code", None)
-
+            
             st.success("✅ Authorization successful! Loading dashboard...")
             time.sleep(1.5)
             st.rerun()
-
+            
         except AuthClientError as e:
             st.error(f"""
                 🔴 QuickBooks API Error:
@@ -325,7 +341,6 @@ class QBTokenManager:
             st.error(f"🔴 Authorization failed: {str(e)}")
             st.session_state.qb_auth_phase = "init"
             st.rerun()
-
 # ————————————————————————————————————————————————
 def main_dashboard():
     st.title("📊 Financial Dashboard")
