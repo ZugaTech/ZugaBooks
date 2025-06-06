@@ -1,5 +1,3 @@
-config.json
-config.enc
 secret.key
 .env
 secrets.toml
