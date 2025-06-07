@@ -174,7 +174,8 @@ with st.sidebar:
 credential_manager()
 
 # ————————————————————————————————————————————————
-# OAuth + tokens (Production-ready, manual code input)
+# ————————————————————————————————————————————————
+# OAuth + tokens (Fixed Implementation)
 class QBTokenManager:
     def __init__(self):
         self.cfg = load_config()
@@ -262,6 +263,15 @@ class QBTokenManager:
 
     def _start_authorization(self):
         """Phase 1: Initiate OAuth flow and show manual code input."""
+        # Check for callback in URL parameters
+        params = query_params.to_dict()
+        if "code" in params:
+            st.session_state.qb_code = params["code"]
+            st.session_state.qb_auth_phase = "code_exchange"
+            # Clear URL parameters
+            query_params.clear()
+            st.rerun()
+            
         st.markdown("## 🔑 QuickBooks Authorization")
         auth_url = self.auth_client.get_authorization_url([Scopes.ACCOUNTING])
         st.markdown(f"""
@@ -276,12 +286,11 @@ class QBTokenManager:
             "Paste the **authorization code** here:",
             key="qb_auth_code"
         )
-        if not code:
-            st.stop()
-
-        st.session_state.qb_code = code.strip()
-        st.session_state.qb_auth_phase = "code_exchange"
-        st.rerun()
+        
+        if code:
+            st.session_state.qb_code = code.strip()
+            st.session_state.qb_auth_phase = "code_exchange"
+            st.rerun()
 
     def _exchange_authorization_code(self):
         """Phase 2: Exchange code for tokens."""
@@ -291,13 +300,19 @@ class QBTokenManager:
             st.rerun()
 
         try:
-            clean_code = st.session_state.qb_code.split("code=")[-1].split("&")[0].strip()
-
-            token_response = self.auth_client.get_bearer_token(clean_code)
+            # Extract the code value if user pasted full URL
+            code_str = st.session_state.qb_code
+            if "code=" in code_str:
+                # Extract just the code value from URL parameters
+                code_str = code_str.split("code=")[1].split("&")[0]
+            
+            with st.spinner("🔒 Exchanging authorization code for tokens..."):
+                token_response = self.auth_client.get_bearer_token(code_str.strip())
 
             if not token_response or not hasattr(token_response, "access_token"):
                 raise ValueError("No tokens returned from QuickBooks API")
 
+            # Store tokens
             st.session_state.tokens = {
                 "access_token": token_response.access_token,
                 "refresh_token": token_response.refresh_token,
@@ -312,7 +327,7 @@ class QBTokenManager:
             self.cfg.update(st.session_state.tokens)
             save_config(self.cfg)
 
-            # Clear state
+            # Clear temporary state
             st.session_state.qb_auth_phase = "complete"
             st.session_state.pop("qb_code", None)
 
