@@ -174,62 +174,121 @@ with st.sidebar:
 credential_manager()
 
 # ————————————————————————————————————————————————
-# ————————————————————————————————————————————————
 class QBTokenManager:
     def __init__(self):
         self.cfg = load_config()
-        for f in ("qb_client_id","qb_client_secret","redirect_uri"):
-            if not self.cfg.get(f):
-                st.error(f"❌ Missing {f} in config")
-                st.stop()
+
+        # Validate required credentials with proper names
+        required_fields = {
+            "qb_client_id": "QuickBooks Client ID",
+            "qb_client_secret": "QuickBooks Client Secret",
+            "redirect_uri": "Redirect URI"
+        }
+        missing = [name for field, name in required_fields.items() if not self.cfg.get(field)]
+        if missing:
+            st.error(f"❌ Missing config: {', '.join(missing)} — configure in the sidebar.")
+            st.stop()
+
         self.auth_client = AuthClient(
             client_id=self.cfg["qb_client_id"],
             client_secret=self.cfg["qb_client_secret"],
             environment="production",
-            redirect_uri=self.cfg["redirect_uri"],
+            redirect_uri=self.cfg["redirect_uri"]
         )
-        st.session_state.setdefault("tokens", {})
-    
+
+        st.session_state.setdefault("tokens", {
+            "access_token": self.cfg.get("access_token"),
+            "refresh_token": self.cfg.get("refresh_token"),
+            "expires_at": self.cfg.get("expires_at", 0)
+        })
+
     def handle_oauth(self) -> bool:
-        toks = st.session_state.tokens
-        
-        # If we already have a valid, unexpired access_token, we’re done:
-        if toks.get("access_token") and time.time() < toks.get("expires_at",0):
+        tokens = st.session_state.tokens
+
+        # If valid token, allow access
+        if tokens.get("access_token") and time.time() < tokens.get("expires_at", 0):
             return True
-        
+
+        # Try refresh if token expired
+        if tokens.get("refresh_token") and self._refresh_token():
+            return True
+
+        # Start manual authorization
+        return self._authorize()
+
+    def _authorize(self) -> bool:
         st.markdown("## 🔑 Connect to QuickBooks")
-        st.markdown(f"[1) Authorize →]({self.auth_client.get_authorization_url([Scopes.ACCOUNTING])})")
-        st.info(f"Your redirect URI: `{self.auth_client.redirect_uri}`")
-        
-        code = st.text_input("2) Paste **authorization code** here", key="qb_manual_code")
+
+        auth_url = self.auth_client.get_authorization_url([Scopes.ACCOUNTING])
+        st.markdown(f"""
+            1. [Click here to authorize]({auth_url})  
+            2. Log into QuickBooks  
+            3. Copy the **authorization code** from the URL  
+        """)
+        st.info(f"**Redirect URI:** `{self.auth_client.redirect_uri}`")
+
+        code = st.text_input("Paste the **authorization code** here:")
         if not code:
             st.stop()
-        
-        # User did paste something—try to exchange it now:
+
+        clean_code = code.strip().split("code=")[-1].split("&")[0]
+
         try:
-            token_resp = self.auth_client.get_bearer_token(code.strip())
-            # Validate:
-            if "access_token" not in token_resp:
-                raise ValueError("no access_token in response")
-            
-            # Save to session + config
-            expires = time.time() + token_resp["expires_in"]
-            st.session_state.tokens = {
-                "access_token": token_resp["access_token"],
-                "refresh_token": token_resp["refresh_token"],
-                "expires_at": expires,
+            with st.spinner("Exchanging code for tokens…"):
+                token_response = self.auth_client.get_bearer_token(clean_code)
+
+            if not token_response or not hasattr(token_response, "access_token"):
+                raise ValueError("No access_token returned.")
+
+            new_tokens = {
+                "access_token": token_response.access_token,
+                "refresh_token": token_response.refresh_token,
+                "expires_at": time.time() + token_response.expires_in
             }
-            self.cfg.update(st.session_state.tokens)
-            # also save realmId if provided
-            if "realmId" in token_resp:
-                self.cfg["realm_id"] = token_resp["realmId"]
+            st.session_state.tokens = new_tokens
+
+            self.cfg.update(new_tokens)
+            if hasattr(self.auth_client, "realm_id") and self.auth_client.realm_id:
+                self.cfg["realm_id"] = self.auth_client.realm_id
+
             save_config(self.cfg)
-            
-            st.success("✅ QuickBooks connected!")
-            st.experimental_rerun()
+
+            st.success("✅ Successfully authorized!")
+            time.sleep(1)
+            st.rerun()
+
+        except AuthClientError as e:
+            st.error(f"🔴 QuickBooks API Error: {e.status_code} - {e.content}")
+            st.stop()
         except Exception as e:
             st.error(f"🔴 Authorization failed: {e}")
             st.stop()
+
+    def _refresh_token(self) -> bool:
+        try:
+            refresh_token = st.session_state.tokens.get("refresh_token")
+            if not refresh_token:
+                return False
+
+            self.auth_client.refresh_token = refresh_token
+            new_tokens = self.auth_client.refresh()
+
+            if not new_tokens or not hasattr(new_tokens, "access_token"):
+                return False
+
+            st.session_state.tokens = {
+                "access_token": new_tokens.access_token,
+                "refresh_token": new_tokens.refresh_token,
+                "expires_at": time.time() + new_tokens.expires_in
+            }
+
+            self.cfg.update(st.session_state.tokens)
+            save_config(self.cfg)
+            return True
+
+        except Exception as e:
+            st.warning(f"🔁 Token refresh failed: {e}")
+            return False
 
 # ————————————————————————————————————————————————
 def main_dashboard():
