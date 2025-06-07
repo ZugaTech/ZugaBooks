@@ -1,0 +1,12 @@
+{
+  "qb_client_id": "YOUR_CLIENT_ID",
+  "qb_client_secret": "YOUR_CLIENT_SECRET",
+  "redirect_uri": "https://your-deployed-url.com",
+  "realm_id": "YOUR_REALM_ID",
+  "access_token": null,
+  "refresh_token": null,
+  "expires_at": 0,
+  "google_sheets": {
+    "sheet_id": "YOUR_SHEET_ID"
+  }
+}
