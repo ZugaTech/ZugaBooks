@@ -246,6 +246,8 @@ class QBTokenManager:
         try:
             with st.spinner("Exchanging code for tokens…"):
                 resp = self.auth_client.get_bearer_token(clean)
+                st.write("⚠️ Token Response (debug):", token_response)
+
 
             at = resp.get("access_token") if isinstance(resp, dict) else getattr(resp, "access_token", None)
             rt = resp.get("refresh_token") if isinstance(resp, dict) else getattr(resp, "refresh_token", None)
