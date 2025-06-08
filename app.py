@@ -227,46 +227,46 @@ class QBTokenManager:
 
         # 4. Exchange code for tokens
         try:
-            # Clean the code
-            clean_code = code.split("code=")[-1].split("&")[0].strip()
-            
-            with st.spinner("🔄 Exchanging code for tokens..."):
-                token_resp = self.auth_client.get_bearer_token(clean_code)
-                
-            # Validate response
-            if not token_resp or "access_token" not in token_resp:
-                st.error(f"🔴 Invalid response: {token_resp}")
-                st.stop()
+            # DEBUG: Show the cleaned code before use
+clean_code = code.strip().split("code=")[-1].split("&")[0]
+st.code(f"🔍 Clean Code Used: {clean_code}")
 
-            # Store tokens
-            new_tokens = {
-                "access_token": token_resp["access_token"],
-                "refresh_token": token_resp["refresh_token"],
-                "expires_at": time.time() + token_resp.get("expires_in", 3600)
-            }
-            st.session_state.tokens = new_tokens
-            
-            # Persist to config
-            self.cfg.update(new_tokens)
-            if "realmId" in token_resp:
-                self.cfg["realm_id"] = token_resp["realmId"]
-            save_config(self.cfg)
-            
-            st.success("✅ Authorization successful! Loading...")
-            time.sleep(1)
-            st.rerun()
-            
-        except AuthClientError as e:
-            st.error(f"""
-                🔴 QuickBooks API Error:
-                Status: {e.status_code}
-                Message: {e.content}
-                Headers: {e.headers}
-            """)
-            st.stop()
-        except Exception as e:
-            st.error(f"🔴 Unexpected error: {str(e)}")
-            st.stop()
+try:
+    with st.spinner("Exchanging code for tokens…"):
+        resp = self.auth_client.get_bearer_token(clean_code)
+        st.code(f"🔄 Raw Response: {resp}")
+
+    at = resp.get("access_token") if isinstance(resp, dict) else getattr(resp, "access_token", None)
+    rt = resp.get("refresh_token") if isinstance(resp, dict) else getattr(resp, "refresh_token", None)
+    ei = resp.get("expires_in")    if isinstance(resp, dict) else getattr(resp, "expires_in", None)
+
+    if not at:
+        st.error(f"🔴 No access_token returned.\nFull response: `{resp}`")
+        st.stop()
+
+    st.session_state.tokens = {
+        "access_token":  at,
+        "refresh_token": rt,
+        "expires_at":    time.time() + (ei or 3600)
+    }
+
+    realm = (resp.get("realmId") or getattr(self.auth_client, "realm_id", None))
+    if realm:
+        self.cfg["realm_id"] = realm
+
+    self.cfg.update(st.session_state.tokens)
+    save_config(self.cfg)
+
+    st.success("✅ Authorization successful!")
+    time.sleep(1)
+    st.rerun()
+
+except AuthClientError as e:
+    st.error(f"🔴 QuickBooks API Error {e.status_code}:\n{e.content}")
+    st.stop()
+except Exception as e:
+    st.error(f"🔴 Authorization failed:\n{e}")
+    st.stop()
 
     def _refresh_token(self):
         """Attempt to refresh expired token"""
