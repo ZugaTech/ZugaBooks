@@ -245,9 +245,12 @@ class QBTokenManager:
 
         
         try:
-    with st.spinner("Exchanging code for tokens…"):
+            with st.spinner("Exchanging code for tokens…"):
         resp = self.auth_client.get_bearer_token(clean)
         st.write("⚠️ Token Response (debug):", resp)
+
+    
+    
 
     # Safely extract values whether resp is dict or object
     at = resp.get("access_token") if isinstance(resp, dict) else getattr(resp, "access_token", None)
