@@ -243,43 +243,52 @@ class QBTokenManager:
         clean = code.strip().split("code=")[-1].split("&")[0]
         st.write(f"Using code: `{clean[:10]}…`")  # debug
 
+        
         try:
-            with st.spinner("Exchanging code for tokens…"):
-                resp = self.auth_client.get_bearer_token(clean)
-                st.write("⚠️ Token Response (debug):", token_response)
+    with st.spinner("Exchanging code for tokens…"):
+        resp = self.auth_client.get_bearer_token(clean)
+        st.write("⚠️ Token Response (debug):", resp)
 
+    # Safely extract values whether resp is dict or object
+    at = resp.get("access_token") if isinstance(resp, dict) else getattr(resp, "access_token", None)
+    rt = resp.get("refresh_token") if isinstance(resp, dict) else getattr(resp, "refresh_token", None)
+    ei = resp.get("expires_in")    if isinstance(resp, dict) else getattr(resp, "expires_in", None)
 
-            at = resp.get("access_token") if isinstance(resp, dict) else getattr(resp, "access_token", None)
-            rt = resp.get("refresh_token") if isinstance(resp, dict) else getattr(resp, "refresh_token", None)
-            ei = resp.get("expires_in")    if isinstance(resp, dict) else getattr(resp, "expires_in", None)
+    # Validate access token
+    if not at:
+        st.error(f"🔴 No access_token returned.\nFull response: `{resp}`")
+        st.stop()
 
-            if not at:
-                st.error(f"🔴 No access_token returned.\nFull response: `{resp}`")
-                st.stop()
+    # Save to session state
+    st.session_state.tokens = {
+        "access_token": at,
+        "refresh_token": rt,
+        "expires_at": time.time() + (ei or 3600)
+    }
 
-            st.session_state.tokens = {
-                "access_token":  at,
-                "refresh_token": rt,
-                "expires_at":    time.time() + (ei or 3600)
-            }
+    # Save realm ID if present
+    realm = (
+        resp.get("realmId") if isinstance(resp, dict)
+        else getattr(resp, "realm_id", None)
+    )
+    if realm:
+        self.cfg["realm_id"] = realm
 
-            realm = (resp.get("realmId") or getattr(self.auth_client, "realm_id", None))
-            if realm:
-                self.cfg["realm_id"] = realm
+    # Persist config and rerun
+    self.cfg.update(st.session_state.tokens)
+    save_config(self.cfg)
 
-            self.cfg.update(st.session_state.tokens)
-            save_config(self.cfg)
+    st.success("✅ Authorization successful!")
+    time.sleep(1)
+    st.rerun()
 
-            st.success("✅ Authorization successful!")
-            time.sleep(1)
-            st.rerun()
+except AuthClientError as e:
+    st.error(f"🔴 QuickBooks API Error {e.status_code}:\n{e.content}")
+    st.stop()
 
-        except AuthClientError as e:
-            st.error(f"🔴 QuickBooks API Error {e.status_code}:\n{e.content}")
-            st.stop()
-        except Exception as e:
-            st.error(f"🔴 Authorization failed:\n{e}")
-            st.stop()
+except Exception as e:
+    st.error(f"🔴 Authorization failed:\n{e}")
+    st.stop()
 
 # ————————————————————————————————————————————————
 def main_dashboard():
