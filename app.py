@@ -42,6 +42,10 @@ cookies = EncryptedCookieManager(prefix="zugabooks", password=COOKIE_SECRET)
 if not cookies.ready():
     st.stop()
 
+# Initialize ConfigManager with the same cookie manager
+from config import ConfigManager
+config_manager = ConfigManager(cookies)
+
 # Password gate (once per 24h)
 APP_PASSWORD = os.getenv("APP_PASSWORD")
 if not APP_PASSWORD:
@@ -73,11 +77,12 @@ def password_gate():
 password_gate()
 
 # Credential and Token Manager
+@st.cache_data
 def credential_manager():
     cfg = load_config()
     with st.sidebar:
         st.markdown("### ZugaBooks")
-        st.markdown("**App Version: 1.3.2**")  # Confirm deployment
+        st.markdown("**App Version: 1.3.3**")  # Confirm deployment
         st.markdown("---")
         st.markdown("### 🔧 Credentials & Settings")
         
