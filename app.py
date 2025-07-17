@@ -26,18 +26,6 @@ from config import load_config, save_config
 from streamlit_cookies_manager import EncryptedCookieManager
 
 # ————————————————————————————————————————————————
-# Cookie + “remember me” setup
-COOKIE_SECRET = os.getenv("COOKIE_SECRET") or st.secrets.get("general", {}).get("COOKIE_SECRET")
-if not COOKIE_SECRET:
-    st.error("🔒 Missing COOKIE_SECRET")
-    st.stop()
-
-cookies = EncryptedCookieManager(prefix="zugabooks", password=COOKIE_SECRET)
-if not cookies.ready():
-    st.stop()
-
-# ————————————————————————————————————————————————
-# Password-gate (once per 24h)# Version: 1.3.0 - Cookie-based config, manual token input, master branch
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
