@@ -14,11 +14,11 @@ from streamlit_cookies_manager import EncryptedCookieManager
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Cookie setup (must match app.py)
-COOKIE_SECRET = st.secrets.get("general", {}).get("COOKIE_SECRET", os.getenv("COOKIE_SECRET"))
+# Get COOKIE_SECRET from environment variable
+COOKIE_SECRET = os.getenv("COOKIE_SECRET")
 if not COOKIE_SECRET:
-    logger.error("Missing COOKIE_SECRET")
-    raise ValueError("COOKIE_SECRET must be set in environment or secrets")
+    logger.error("COOKIE_SECRET not set in environment variables")
+    raise ValueError("COOKIE_SECRET must be set in Render environment variables")
 
 config_cookies = EncryptedCookieManager(prefix="zugabooks_config", password=COOKIE_SECRET)
 if not config_cookies.ready():
@@ -39,7 +39,7 @@ class ConfigManager:
             "google_sheets": {
                 "sheet_id": "1ZVOs-WWFtfUfwrBwyMa18IFvrB_4YWZlACmFJ3ZGMV8"
             },
-            "version": "1.3.0"
+            "version": "1.3.2"
         }
         # Load from cookie or use default
         if "config" not in st.session_state:
