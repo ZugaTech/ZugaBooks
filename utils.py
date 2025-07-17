@@ -20,7 +20,6 @@ def get_report_dataframe(rows, report_type):
 
     df = pd.DataFrame(data)
 
-    # Optional renaming based on known report types
     if report_type == "ProfitAndLoss":
         col_names = ['Account', 'Amount'] if df.shape[1] == 2 else df.columns.tolist()
         df.columns = col_names
@@ -33,7 +32,6 @@ def get_report_dataframe(rows, report_type):
             df.columns = col_names
 
     return df
-
 
 def apply_custom_categories(df, csv_file):
     if not csv_file:
