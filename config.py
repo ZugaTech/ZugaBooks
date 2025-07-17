@@ -1,12 +1,7 @@
-# config.py - Enterprise-Grade Configuration Manager
-import os
-import json
+# Version: 1.3.3 - Pass EncryptedCookieManager from app.py to avoid DuplicateWidgetID
 import logging
-import hashlib
-from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
-from cryptography.fernet import Fernet, InvalidToken
-from datetime import datetime, timedelta
+import json
+import os
 import streamlit as st
 from streamlit_cookies_manager import EncryptedCookieManager
 
@@ -14,19 +9,14 @@ from streamlit_cookies_manager import EncryptedCookieManager
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Get COOKIE_SECRET from environment variable
-COOKIE_SECRET = os.getenv("COOKIE_SECRET")
-if not COOKIE_SECRET:
-    logger.error("COOKIE_SECRET not set in environment variables")
-    raise ValueError("COOKIE_SECRET must be set in Render environment variables")
-
-config_cookies = EncryptedCookieManager(prefix="zugabooks_config", password=COOKIE_SECRET)
-if not config_cookies.ready():
-    logger.error("Config cookies not ready")
-    raise RuntimeError("Config cookies initialization failed")
-
 class ConfigManager:
-    def __init__(self):
+    def __init__(self, cookie_manager):
+        # Store the passed cookie manager
+        self.config_cookies = cookie_manager
+        if not self.config_cookies.ready():
+            logger.error("Config cookies not ready")
+            raise RuntimeError("Config cookies initialization failed")
+
         # Initialize with defaults from config.json
         self.default_config = {
             "qb_client_id": "",
@@ -39,7 +29,7 @@ class ConfigManager:
             "google_sheets": {
                 "sheet_id": "1ZVOs-WWFtfUfwrBwyMa18IFvrB_4YWZlACmFJ3ZGMV8"
             },
-            "version": "1.3.2"
+            "version": "1.3.3"
         }
         # Load from cookie or use default
         if "config" not in st.session_state:
@@ -49,9 +39,9 @@ class ConfigManager:
 
     def load_config_from_cookie(self):
         """Load configuration from encrypted cookie"""
-        if "config" in config_cookies:
+        if "config" in self.config_cookies:
             try:
-                config_str = config_cookies["config"]
+                config_str = self.config_cookies["config"]
                 config = json.loads(config_str)
                 logger.info("Loaded config from cookie")
                 print("Loaded config from cookie")  # Debug
@@ -65,8 +55,8 @@ class ConfigManager:
         """Save configuration to encrypted cookie"""
         try:
             config_str = json.dumps(config)
-            config_cookies["config"] = config_str
-            config_cookies.save()
+            self.config_cookies["config"] = config_str
+            self.config_cookies.save()
             logger.info("Saved config to cookie")
             print("Saved config to cookie")  # Debug
         except Exception as e:
@@ -97,12 +87,16 @@ class ConfigManager:
         logger.info(f"Set config key: {key}")
         print(f"Set config key: {key}")  # Debug
 
-# Singleton instance
-config_manager = ConfigManager()
+# Singleton instance (will be initialized in app.py)
+config_manager = None
 
 # Public functions
 def load_config():
+    if config_manager is None:
+        raise RuntimeError("ConfigManager not initialized")
     return config_manager.load_config()
 
 def save_config(config):
+    if config_manager is None:
+        raise RuntimeError("ConfigManager not initialized")
     config_manager.save_config(config)
