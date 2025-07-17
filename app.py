@@ -32,9 +32,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Cookie setup for password gate and config
-COOKIE_SECRET = os.getenv("COOKIE_SECRET") or st.secrets.get("general", {}).get("COOKIE_SECRET")
+COOKIE_SECRET = os.getenv("COOKIE_SECRET")
 if not COOKIE_SECRET:
-    st.error("🔒 Missing COOKIE_SECRET")
+    st.error("🔒 Missing COOKIE_SECRET in environment variables")
+    logger.error("COOKIE_SECRET not set in environment variables")
     st.stop()
 
 cookies = EncryptedCookieManager(prefix="zugabooks", password=COOKIE_SECRET)
@@ -42,9 +43,10 @@ if not cookies.ready():
     st.stop()
 
 # Password gate (once per 24h)
-APP_PASSWORD = os.getenv("APP_PASSWORD") or st.secrets.get("APP_PASSWORD", "")
+APP_PASSWORD = os.getenv("APP_PASSWORD")
 if not APP_PASSWORD:
-    st.error("🔒 Missing APP_PASSWORD")
+    st.error("🔒 Missing APP_PASSWORD in environment variables")
+    logger.error("APP_PASSWORD not set in environment variables")
     st.stop()
 
 def password_gate():
@@ -75,7 +77,7 @@ def credential_manager():
     cfg = load_config()
     with st.sidebar:
         st.markdown("### ZugaBooks")
-        st.markdown("**App Version: 1.3.0**")  # Confirm deployment
+        st.markdown("**App Version: 1.3.2**")  # Confirm deployment
         st.markdown("---")
         st.markdown("### 🔧 Credentials & Settings")
         
