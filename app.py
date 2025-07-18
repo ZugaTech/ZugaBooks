@@ -82,7 +82,7 @@ def credential_manager():
     cfg = load_config()
     with st.sidebar:
         st.markdown("### ZugaBooks")
-        st.markdown("**App Version: 1.3.6**")
+        st.markdown("**App Version: 1.3.7**")  # Updated version
         st.markdown("---")
         st.markdown("### 🔧 Credentials & Settings")
         
@@ -214,7 +214,7 @@ class QBTokenManager:
 
         try:
             clean_code = code.strip().split("code=")[-1].split("&")[0]
-            st.code(f"🔍 Clean Code Used_CM: {clean_code}")
+            st.code(f"🔍 Clean Code Used: {clean_code}")
             with st.spinner("Exchanging code for tokens…"):
                 resp = self.auth_client.get_bearer_token(clean_code)
                 logger.info(f"Raw Response: {resp}")
@@ -357,7 +357,7 @@ def main_dashboard():
                     1. Verify QuickBooks connection (check client ID, secret, and tokens)
                     2. Ensure date range contains data
                     3. Confirm user permissions in QuickBooks
-                ""
+                """)
                 logger.error(f"Report generation failed: {e}")
 
 # Main Execution
