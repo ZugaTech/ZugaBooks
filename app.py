@@ -22,7 +22,7 @@ import pandas as pd
 from intuitlib.enums import Scopes
 from intuitlib.exceptions import AuthClientError
 from utils import get_report_dataframe, apply_custom_categories
-from config import load_config, save_config, initialize
+from config import load_config, save_config
 from streamlit_cookies_manager import EncryptedCookieManager
 
 # ————————————————————————————————————————————————
@@ -44,8 +44,8 @@ if not cookies.ready():
 
 # Initialize ConfigManager
 import config
-config.initialize(cookies)
-logger.info("ConfigManager initialization called")
+config.config_manager = config.ConfigManager(cookies)
+logger.info("ConfigManager initialized")
 
 # Password gate
 APP_PASSWORD = os.getenv("APP_PASSWORD")
@@ -77,13 +77,12 @@ def password_gate():
 
 password_gate()
 
-# Credential and Token Manager (no caching)
+# Credential and Token Manager
 def credential_manager():
-    logger.info("Entering credential_manager")
     cfg = load_config()
     with st.sidebar:
         st.markdown("### ZugaBooks")
-        st.markdown("**App Version: 1.3.5**")
+        st.markdown("**App Version: 1.3.6**")
         st.markdown("---")
         st.markdown("### 🔧 Credentials & Settings")
         
@@ -116,7 +115,6 @@ def credential_manager():
                 save_config(cfg)
                 st.success("✅ Configuration saved successfully!")
                 st.balloons()
-                st.cache_data.clear()
                 st.rerun()
             else:
                 st.warning("⚠️ No changes detected")
@@ -162,7 +160,7 @@ def credential_manager():
                 "version": cfg.get("version", "Unknown")
             })
 
-# QBTokenManager (unchanged for brevity, assumed correct)
+# QBTokenManager
 class QBTokenManager:
     def __init__(self):
         self.cfg = load_config()
@@ -198,16 +196,169 @@ class QBTokenManager:
         tokens = st.session_state.tokens
         if tokens.get("access_token") and time.time() < tokens.get("expires_at", 0):
             return True
-        # ... (rest unchanged)
+
+        st.markdown("## 🔑 QuickBooks Authorization")
+        auth_url = self.auth_client.get_authorization_url([Scopes.ACCOUNTING])
+        logger.info(f"Generated auth URL: {auth_url}")
+        st.markdown(f"""
+            ### Steps:
+            1. [Authorize in QuickBooks]({auth_url})
+            2. Copy the **code** parameter from the URL
+            3. Paste below
+        """)
+        st.warning("⚠️ Codes expire in 5 minutes!")
+
+        code = st.text_input("Paste authorization code:", key="qb_auth_code")
+        if not code:
+            st.stop()
+
+        try:
+            clean_code = code.strip().split("code=")[-1].split("&")[0]
+            st.code(f"🔍 Clean Code Used_CM: {clean_code}")
+            with st.spinner("Exchanging code for tokens…"):
+                resp = self.auth_client.get_bearer_token(clean_code)
+                logger.info(f"Raw Response: {resp}")
+
+            at = resp.get("access_token") if isinstance(resp, dict) else getattr(resp, "access_token", None)
+            rt = resp.get("refresh_token") if isinstance(resp, dict) else getattr(resp, "refresh_token", None)
+            ei = resp.get("expires_in") if isinstance(resp, dict) else getattr(resp, "expires_in", None)
+
+            if not at:
+                st.error(f"🔴 No access_token returned.\nFull response: `{resp}`")
+                st.stop()
+
+            st.session_state.tokens = {
+                "access_token": at,
+                "refresh_token": rt,
+                "expires_at": time.time() + (ei or 3600)
+            }
+            self.cfg.update(st.session_state.tokens)
+            realm = resp.get("realmId") or getattr(self.auth_client, "realm_id", None)
+            if realm:
+                self.cfg["realm_id"] = realm
+            save_config(self.cfg)
+            logger.info(f"Token saved to config: {st.session_state.tokens}")
+            st.success("✅ Authorization successful! Copy tokens from 'Show Current Tokens'.")
+            st.rerun()
+            return True
+        except AuthClientError as e:
+            st.error(f"🔴 QuickBooks API Error {e.status_code}:\n{e.content}")
+            logger.error(f"QuickBooks API Error {e.status_code}: {e.content}")
+            st.stop()
+        except Exception as e:
+            st.error(f"🔴 Authorization failed: {e}")
+            logger.error(f"Authorization failed: {e}")
+            st.stop()
 
     def _refresh_token(self):
-        # ... (rest unchanged)
-        pass
+        try:
+            refresh_token = st.session_state.tokens.get("refresh_token")
+            if not refresh_token:
+                return False
+            self.auth_client.refresh_token = refresh_token
+            new_tokens = self.auth_client.refresh()
+            if not new_tokens or not hasattr(new_tokens, "access_token"):
+                return False
+            st.session_state.tokens = {
+                "access_token": new_tokens.access_token,
+                "refresh_token": new_tokens.refresh_token,
+                "expires_at": time.time() + new_tokens.expires_in
+            }
+            self.cfg.update(st.session_state.tokens)
+            save_config(self.cfg)
+            logger.info(f"Token refreshed: {st.session_state.tokens}")
+            return True
+        except Exception as e:
+            logger.error(f"Token refresh failed: {e}")
+            return False
 
-# Main Dashboard (unchanged for brevity, assumed correct)
+# Main Dashboard
 def main_dashboard():
     st.title("📊 Financial Dashboard")
-    # ... (rest unchanged)
+    today = date.today()
+    col1, col2 = st.columns(2)
+    with col1:
+        start = st.date_input("Start Date", today - timedelta(days=30), key="start")
+    with col2:
+        end = st.date_input("End Date", today, key="end")
+
+    if start > end:
+        st.error("⚠️ End date must be after start date.")
+        st.stop()
+
+    rpt = st.selectbox("Select Report Type", ["ProfitAndLoss", "BalanceSheet", "TransactionList"], key="rpt")
+
+    m = st.sidebar.file_uploader("CSV: Vendor→Category", type=["csv"], key="map")
+    cat_map = {}
+    if m:
+        try:
+            dfm = pd.read_csv(m)
+            if {'Vendor', 'Category'}.issubset(dfm.columns):
+                cat_map = dict(zip(dfm['Vendor'], dfm['Category']))
+            else:
+                st.sidebar.warning("CSV must contain 'Vendor' and 'Category' columns.")
+        except Exception as e:
+            st.sidebar.error(f"Error reading CSV: {e}")
+
+    if st.button("🔄 Generate Report", key="gen"):
+        with st.spinner("Fetching report…"):
+            try:
+                if not st.session_state.tokens.get("access_token"):
+                    st.error("No access token found. Please authorize or enter tokens manually in the sidebar.")
+                    logger.error("No access token found in main_dashboard")
+                    return
+                if time.time() > st.session_state.tokens.get("expires_at", 0):
+                    if not token_manager._refresh_token():
+                        st.error("Token refresh failed. Please re-authorize or enter tokens manually.")
+                        return
+
+                qb = QuickBooks(
+                    auth_client=token_manager.auth_client,
+                    access_token=st.session_state.tokens["access_token"],
+                    refresh_token=st.session_state.tokens["refresh_token"],
+                    company_id=token_manager.cfg.get("realm_id", "")
+                )
+                params = {
+                    "start_date": start.strftime("%Y-%m-%d"),
+                    "end_date": end.strftime("%Y-%m-%d")
+                }
+                rep = qb.get_report(report_name=rpt, params=params)
+                df = get_report_dataframe(rep.get("Rows", {}).get("Row", []), rpt)
+                if cat_map:
+                    df = apply_custom_categories(df, m)
+                st.subheader(f"{rpt} Report")
+                st.dataframe(df, use_container_width=True)
+
+                if st.button("📤 Export to Google Sheets", key="exp"):
+                    cfg2 = load_config()
+                    sheet_id = cfg2.get("google_sheets", {}).get("sheet_id", "")
+                    sa_json = cfg2.get("service_account_json")
+                    if not sheet_id or not sa_json:
+                        st.error("❌ Google Sheets configuration incomplete")
+                        return
+                    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+                    creds = ServiceAccountCredentials.from_json_keyfile_dict(sa_json, scope)
+                    gc = gspread.authorize(creds)
+                    sheet = gc.open_by_key(sheet_id)
+                    try:
+                        ws = sheet.worksheet(rpt)
+                    except gspread.exceptions.WorksheetNotFound:
+                        ws = sheet.add_worksheet(title=rpt, rows=len(df)+1, cols=len(df.columns))
+                    ws.clear()
+                    ws.update("A1", [df.columns.tolist()] + df.values.tolist(), value_input_option="USER_ENTERED")
+                    st.success("✅ Exported to Google Sheets!")
+
+                st.download_button("💾 Download CSV", data=df.to_csv(index=False),
+                                 file_name=f"{rpt}_{today}.csv", mime="text/csv", key="dl")
+            except Exception as e:
+                st.error(f"""
+                    ❌ Report generation failed: {e}
+                    **Troubleshooting Tips:**
+                    1. Verify QuickBooks connection (check client ID, secret, and tokens)
+                    2. Ensure date range contains data
+                    3. Confirm user permissions in QuickBooks
+                ""
+                logger.error(f"Report generation failed: {e}")
 
 # Main Execution
 if __name__ == "__main__":
