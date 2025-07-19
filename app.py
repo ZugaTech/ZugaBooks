@@ -407,4 +407,4 @@ if __name__ == "__main__":
 
     if token_manager.handle_oauth():
         main_dashboard()
-        main_dashboard()
+        
