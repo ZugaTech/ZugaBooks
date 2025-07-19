@@ -55,10 +55,7 @@ if not APP_PASSWORD:
     st.stop()
 
 def password_gate():
-    # Log APP_PASSWORD for debugging (sanitized)
     logger.debug(f"APP_PASSWORD loaded: {'*' * len(APP_PASSWORD) if APP_PASSWORD else 'None'}")
-    
-    # Check if authenticated via cookie timestamp
     last_ts = cookies.get("last_auth_ts")
     now = int(time.time())
     if last_ts:
@@ -71,16 +68,13 @@ def password_gate():
         except ValueError:
             logger.warning("Invalid last_auth_ts cookie value")
 
-    # Initialize authentication state
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
 
-    # If already authenticated, proceed
     if st.session_state.authenticated:
         logger.info("Already authenticated, proceeding")
         return
 
-    # Display password input in sidebar
     st.sidebar.title("🔐 Login Required")
     pw = st.sidebar.text_input("Enter Access Password", type="password", key="password_gate").strip()
     logger.debug(f"User input password length: {len(pw) if pw else 0}")
@@ -92,7 +86,7 @@ def password_gate():
             cookies.save()
             st.sidebar.success("✅ Access granted — valid for 24 h")
             logger.info("Password authentication successful")
-            st.rerun()  # Rerun to refresh state
+            st.rerun()
         else:
             st.sidebar.error("❌ Incorrect password")
             logger.error("Password authentication failed: incorrect password")
@@ -108,7 +102,7 @@ def credential_manager():
     cfg = load_config()
     with st.sidebar:
         st.markdown("### ZugaBooks")
-        st.markdown("**App Version: 1.3.8**")  # Updated version
+        st.markdown("**App Version: 1.3.9**")  # Updated version
         st.markdown("---")
         st.markdown("### 🔧 Credentials & Settings")
         
@@ -239,18 +233,24 @@ class QBTokenManager:
             st.stop()
 
         try:
-            clean_code = code.strip().split("code=")[-1].split("&")[0]
+            # Simplified code parsing
+            clean_code = code.strip()
+            if "code=" in clean_code:
+                clean_code = clean_code.split("code=")[-1].split("&")[0]
+            logger.debug(f"Cleaned auth code: {clean_code}")
             st.code(f"🔍 Clean Code Used: {clean_code}")
+
             with st.spinner("Exchanging code for tokens…"):
-                resp = self.auth_client.get_bearer_token(clean_code)
-                logger.info(f"Raw Response: {resp}")
+                resp = self.auth_client.get_bearer_token(clean_code, realm_id=self.cfg.get("realm_id"))
+                logger.debug(f"Raw token response: {resp}")
 
             at = resp.get("access_token") if isinstance(resp, dict) else getattr(resp, "access_token", None)
             rt = resp.get("refresh_token") if isinstance(resp, dict) else getattr(resp, "refresh_token", None)
             ei = resp.get("expires_in") if isinstance(resp, dict) else getattr(resp, "expires_in", None)
 
-            if not at:
-                st.error(f"🔴 No access_token returned.\nFull response: `{resp}`")
+            if not at or not rt:
+                st.error(f"🔴 No access_token or refresh_token returned.\nFull response: `{resp}`")
+                logger.error(f"No access_token or refresh_token returned: {resp}")
                 st.stop()
 
             st.session_state.tokens = {
@@ -407,7 +407,4 @@ if __name__ == "__main__":
 
     if token_manager.handle_oauth():
         main_dashboard()
-        st.sidebar.warning("🔴 Not connected to QuickBooks")
-
-    if token_manager.handle_oauth():
         main_dashboard()
