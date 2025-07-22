@@ -190,7 +190,7 @@ class QBTokenManager:
             client_id=self.cfg.get("qb_client_id", ""),
             client_secret=self.cfg.get("qb_client_secret", ""),
             environment="production",
-            redirect_uri=self.cfg.get("redirect_uri", "https://zugabooks.onrender.com/")
+            redirect_uri=self.cfg.get("redirect_uri", "https://zugabooks.onrender.com")
         )
         self._init_token_state()
 
