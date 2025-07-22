@@ -11,6 +11,7 @@ st.set_page_config(
 import os
 import time
 import json
+import requests
 from datetime import date, timedelta
 from pathlib import Path
 import logging
@@ -102,7 +103,7 @@ def credential_manager():
     cfg = load_config()
     with st.sidebar:
         st.markdown("### ZugaBooks")
-        st.markdown("**App Version: 1.3.9**")  # Updated version
+        st.markdown("**App Version: 1.3.11**")  # Updated version
         st.markdown("---")
         st.markdown("### 🔧 Credentials & Settings")
         
@@ -233,7 +234,6 @@ class QBTokenManager:
             st.stop()
 
         try:
-            # Simplified code parsing
             clean_code = code.strip()
             if "code=" in clean_code:
                 clean_code = clean_code.split("code=")[-1].split("&")[0]
@@ -241,12 +241,35 @@ class QBTokenManager:
             st.code(f"🔍 Clean Code Used: {clean_code}")
 
             with st.spinner("Exchanging code for tokens…"):
-                resp = self.auth_client.get_bearer_token(clean_code, realm_id=self.cfg.get("realm_id"))
-                logger.debug(f"Raw token response: {resp}")
+                # Try intuitlib first
+                try:
+                    self.auth_client.environment = "production"
+                    resp = self.auth_client.get_bearer_token(clean_code, realm_id=self.cfg.get("realm_id"))
+                    logger.debug(f"Intuitlib token response: {resp}")
+                except Exception as intuit_error:
+                    logger.warning(f"Intuitlib failed: {intuit_error}")
+                    # Fallback to direct HTTP request
+                    token_url = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer"
+                    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+                    data = {
+                        "grant_type": "authorization_code",
+                        "code": clean_code,
+                        "redirect_uri": self.cfg.get("redirect_uri", "https://zugabooks.onrender.com"),
+                        "client_id": self.cfg.get("qb_client_id"),
+                        "client_secret": self.cfg.get("qb_client_secret")
+                    }
+                    auth = (self.cfg.get("qb_client_id"), self.cfg.get("qb_client_secret"))
+                    resp = requests.post(token_url, data=data, headers=headers, auth=auth)
+                    logger.debug(f"HTTP token response: {resp.status_code}, {resp.text}")
+                    if resp.status_code != 200:
+                        st.error(f"🔴 Token request failed: HTTP {resp.status_code}, {resp.text}")
+                        logger.error(f"Token request failed: HTTP {resp.status_code}, {resp.text}")
+                        st.stop()
+                    resp = resp.json()
 
-            at = resp.get("access_token") if isinstance(resp, dict) else getattr(resp, "access_token", None)
-            rt = resp.get("refresh_token") if isinstance(resp, dict) else getattr(resp, "refresh_token", None)
-            ei = resp.get("expires_in") if isinstance(resp, dict) else getattr(resp, "expires_in", None)
+            at = resp.get("access_token")
+            rt = resp.get("refresh_token")
+            ei = resp.get("expires_in")
 
             if not at or not rt:
                 st.error(f"🔴 No access_token or refresh_token returned.\nFull response: `{resp}`")
@@ -407,4 +430,3 @@ if __name__ == "__main__":
 
     if token_manager.handle_oauth():
         main_dashboard()
-        
