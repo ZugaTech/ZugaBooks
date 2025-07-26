@@ -1,6 +1,4 @@
 import streamlit as st
-# ————————————————————————————————————————————————
-# MUST be the very first call
 st.set_page_config(
     page_title="ZugaBooks",
     page_icon="📊",
@@ -103,7 +101,7 @@ def credential_manager():
     cfg = load_config()
     with st.sidebar:
         st.markdown("### ZugaBooks")
-        st.markdown("**App Version: 1.3.11**")  # Updated version
+        st.markdown("**App Version: 1.3.11**")  
         st.markdown("---")
         st.markdown("### 🔧 Credentials & Settings")
         
