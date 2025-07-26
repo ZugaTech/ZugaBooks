@@ -1,4 +1,4 @@
-# Version: 1.3.7 - Updated version number for consistency with app.py
+# Version: 1.3.7 
 import logging
 import json
 import os
@@ -17,25 +17,25 @@ class ConfigManager:
             logger.error("Config cookies not ready")
             raise RuntimeError("Config cookies initialization failed")
 
-        # Initialize with defaults from config.json
+        
         self.default_config = {
             "qb_client_id": "",
             "qb_client_secret": "",
-            "redirect_uri": "https://zugabooks.onrender.com",
-            "realm_id": "9341454953961084",
+            "redirect_uri": "",
+            "realm_id": "",
             "access_token": None,
             "refresh_token": None,
             "expires_at": 0,
             "google_sheets": {
                 "sheet_id": "1ZVOs-WWFtfUfwrBwyMa18IFvrB_4YWZlACmFJ3ZGMV8"
             },
-            "version": "1.3.7"  # Updated to match app.py
+            "version": "1.3.7"  
         }
         # Load from cookie or use default
         if "config" not in st.session_state:
             st.session_state.config = self.load_config_from_cookie() or self.default_config
         logger.info("Initialized in-memory ConfigManager")
-        print("Initialized in-memory ConfigManager")  # Debug
+        print("Initialized in-memory ConfigManager")  
 
     def load_config_from_cookie(self):
         """Load configuration from encrypted cookie"""
@@ -44,11 +44,11 @@ class ConfigManager:
                 config_str = self.config_cookies["config"]
                 config = json.loads(config_str)
                 logger.info("Loaded config from cookie")
-                print("Loaded config from cookie")  # Debug
+                print("Loaded config from cookie")  
                 return config
             except Exception as e:
                 logger.error(f"Failed to load config from cookie: {e}")
-                print(f"Failed to load config from cookie: {e}")  # Debug
+                print(f"Failed to load config from cookie: {e}")  # 
         return None
 
     def save_config_to_cookie(self, config):
