@@ -15,7 +15,7 @@ import numpy as np
 from datetime import date, timedelta
 import logging
 from streamlit_cookies_manager import EncryptedCookieManager
-from config import load_config, save_config, config_manager
+from config import load_config, save_config, config_manager as global_config_manager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -84,11 +84,10 @@ def show_welcome():
 
 # --- Login System ---
 def login():
-    """Multi-user login system with form submission"""
     with st.sidebar.form("login_form"):
         st.title("Login")
-        username = st.text_input("Username", key="login_username")
-        password = st.text_input("Password", type="password", key="login_password")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
         if st.form_submit_button("Login"):
             if username in users and bcrypt.checkpw(password.encode(), users[username].encode()):
                 st.session_state["username"] = username
@@ -99,10 +98,9 @@ def login():
 
 # --- Password Gate ---
 def password_gate():
-    """App-level password authentication"""
     with st.sidebar.form("password_gate_form"):
         st.title("🔐 App Access")
-        pw = st.text_input("Enter App Password", type="password", key="password_gate")
+        pw = st.text_input("Enter App Password", type="password")
         if st.form_submit_button("Submit"):
             if pw == os.getenv("APP_PASSWORD", "").strip():
                 st.session_state.authenticated = True
@@ -117,19 +115,18 @@ def password_gate():
 
 # --- Credential Manager ---
 def credential_manager():
-    """Manage QuickBooks and Google Sheets credentials"""
     cfg = load_config()
     st.subheader("Integration Credentials")
     st.markdown("Enter API tokens for external services. Sensitive data is securely stored.")
     with st.expander("QuickBooks Integration", expanded=False):
-        qb_token = st.text_input("QuickBooks API Token", value=cfg.get("qb_client_id", ""), type="password", key="qb_token")
-        if st.button("🔗 Connect QuickBooks", key="qb_connect"):
+        qb_token = st.text_input("QuickBooks API Token", value=cfg.get("qb_client_id", ""), type="password")
+        if st.button("🔗 Connect QuickBooks"):
             cfg["qb_client_id"] = qb_token
             save_config(cfg)
             st.success("QuickBooks connected successfully!")
     with st.expander("Google Sheets Integration", expanded=False):
-        gs_token = st.text_input("Google Sheets API Token", value=cfg.get("google_sheets", {}).get("sheet_id", ""), type="password", key="gs_token")
-        if st.button("🔗 Connect Google Sheets", key="gs_connect"):
+        gs_token = st.text_input("Google Sheets API Token", value=cfg.get("google_sheets", {}).get("sheet_id", ""), type="password")
+        if st.button("🔗 Connect Google Sheets"):
             cfg.setdefault("google_sheets", {})["sheet_id"] = gs_token
             save_config(cfg)
             st.success("Google Sheets connected successfully!")
@@ -166,14 +163,14 @@ def reports_page():
     today = date.today()
     col1, col2 = st.columns(2)
     with col1:
-        start = st.date_input("Start Date", today - timedelta(days=30), key="start")
+        start = st.date_input("Start Date", today - timedelta(days=30))
     with col2:
-        end = st.date_input("End Date", today, key="end")
+        end = st.date_input("End Date", today)
     if start > end:
         st.error("⚠️ End date must be after start date.")
         st.stop()
-    rpt = st.selectbox("Select Report Type", ["Profit & Loss", "Balance Sheet", "Transaction List"], key="rpt")
-    if st.button("🔄 Generate Report", key="gen"):
+    rpt = st.selectbox("Select Report Type", ["Profit & Loss", "Balance Sheet", "Transaction List"])
+    if st.button("🔄 Generate Report"):
         with st.spinner("Compiling report data..."):
             time.sleep(2)
             if rpt == "Profit & Loss":
@@ -198,10 +195,10 @@ def reports_page():
             st.subheader("Export Options")
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("📤 Export to Google Sheets", key="exp"):
+                if st.button("📤 Export to Google Sheets"):
                     st.success("✅ Report exported to Google Sheets!")
             with col2:
-                st.download_button("💾 Download CSV", data=data.to_csv(index=False), file_name=f"{rpt.replace(' ','_')}_{today}.csv", mime="text/csv", key="dl")
+                st.download_button("💾 Download CSV", data=data.to_csv(index=False), file_name=f"{rpt.replace(' ','_')}_{today}.csv", mime="text/csv")
 
 # --- Settings Page ---
 def settings_page():
@@ -210,20 +207,20 @@ def settings_page():
     st.subheader("Account Settings")
     col1, col2 = st.columns(2)
     with col1:
-        st.text_input("Name", value="John Doe", key="user_name")
+        st.text_input("Name", value="John Doe")
     with col2:
-        st.text_input("Email", value="john@example.com", key="user_email")
+        st.text_input("Email", value="john@example.com")
     st.subheader("Preferences")
-    theme = st.selectbox("Theme", ["Light","Dark","System Default"], key="theme_select")
-    timezone = st.selectbox("Timezone", ["UTC","EST","PST","CET"], key="timezone_select")
+    theme = st.selectbox("Theme", ["Light","Dark","System Default"])
+    timezone = st.selectbox("Timezone", ["UTC","EST","PST","CET"])
     credential_manager()
-    if st.button("💾 Save Settings", key="save_settings"):
+    if st.button("💾 Save Settings"):
         st.success("Settings saved successfully!")
 
 # --- Navigation ---
 def navigation_dashboard():
     st.sidebar.title("Navigation")
-    page = st.sidebar.radio("", ["Dashboard","Reports","Settings"], key="nav_radio")
+    page = st.sidebar.radio("", ["Dashboard","Reports","Settings"])
     st.sidebar.markdown("---")
     st.sidebar.markdown("### System Status")
     st.sidebar.markdown("QuickBooks: <span class='status-success'>Connected</span>", unsafe_allow_html=True)
@@ -237,7 +234,6 @@ def navigation_dashboard():
 
 # --- Main App ---
 def main():
-    # Initialize cookies
     if "cookies" not in st.session_state:
         st.session_state.cookies = EncryptedCookieManager(
             prefix="zugabooks",
@@ -247,25 +243,26 @@ def main():
         st.warning("Initializing cookie manager, please wait...")
         time.sleep(1)
         st.rerun()
-    # Initialize ConfigManager
-    if config_manager is None:
-        config.config_manager = config.ConfigManager(st.session_state.cookies)
+
+    global config_manager
+    if global_config_manager is None:
+        from config import ConfigManager
+        config_manager = ConfigManager(st.session_state.cookies)
         logger.info("ConfigManager initialized")
-    # Maintenance Alert
+
     st.warning("🚧 App under maintenance and updates. Some features may be temporarily unavailable.")
-    # Show welcome screen once
+
     if "welcome_shown" not in st.session_state:
         show_welcome()
         st.session_state.welcome_shown = True
         st.rerun()
-    # Authentication flow
+
     if "username" not in st.session_state:
         login()
+    elif not st.session_state.get("authenticated", False):
+        password_gate()
     else:
-        if not st.session_state.get("authenticated", False):
-            password_gate()
-        else:
-            navigation_dashboard()
+        navigation_dashboard()
 
 if __name__ == "__main__":
     main()
