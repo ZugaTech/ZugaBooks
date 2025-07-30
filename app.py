@@ -23,7 +23,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 from intuitlib.enums import Scopes
 from intuitlib.exceptions import AuthClientError
 from utils import get_report_dataframe, apply_custom_categories
-from config import load_config, save_config
+from config import load_config, save_config, config_manager
 from streamlit_cookies_manager import EncryptedCookieManager
 
 # Configure logging
@@ -149,7 +149,7 @@ def credential_manager():
     st.sidebar.markdown("### 🔧 Credentials & Settings")
     new_cid = st.sidebar.text_input("QuickBooks Client ID", value=cfg.get("qb_client_id", ""), type="password", key="cred_qb_client_id")
     new_secret = st.sidebar.text_input("QuickBooks Client Secret", value=cfg.get("qb_client_secret", ""), type="password", key="cred_qb_client_secret")
-    new_redirect = st.sidebar.text_input("QuickBooks Redirect URI", value=cfg.get("redirect_uri", "https://zugabooks.onrender.com"), key="cred_qb_redirect_uri")
+    new_redirect = st.sidebar.text_input("QuickBooks Redirect URI", value=cfg.get("redirect_uri", "https://zugabooks.onrender.com"), key="cred_qb_client_redirect")
     new_realm = st.sidebar.text_input("QuickBooks Realm ID", value=cfg.get("realm_id", "9341454953961084"), type="password", key="cred_qb_realm_id")
     new_sheet = st.sidebar.text_input("Google Sheet ID", value=cfg.get("google_sheets", {}).get("sheet_id", "1ZVOs-WWFtfUfwrBwyMa18IFvrB_4YWZlACmFJ3ZGMV8"), key="cred_google_sheet_id")
     sa_file = st.sidebar.file_uploader("Service Account JSON", type=["json"], key="cred_sa_file_uploader")
@@ -215,8 +215,87 @@ class QBTokenManager:
         tokens = st.session_state.tokens
         if tokens.get("access_token") and time.time() < tokens.get("expires_at", 0):
             return True
-        # OAuth handling remains unchanged; omitted for brevity
-        return False
+
+        st.markdown("## 🔑 QuickBooks Authorization")
+        auth_url = self.auth_client.get_authorization_url([Scopes.ACCOUNTING])
+        logger.info(f"Generated auth URL: {auth_url}")
+        st.markdown(f"""
+            ### Steps:
+            1. [Authorize in QuickBooks]({auth_url})
+            2. Copy the **code** parameter from the URL
+            3. Paste below
+        """)
+        st.warning("⚠️ Codes expire in 5 minutes!")
+
+        code = st.text_input("Paste authorization code:", key="qb_auth_code")
+        if not code:
+            st.stop()
+
+        try:
+            clean_code = code.strip()
+            if "code=" in clean_code:
+                clean_code = clean_code.split("code=")[-1].split("&")[0]
+            logger.debug(f"Cleaned auth code: {clean_code}")
+            st.code(f"🔍 Clean Code Used: {clean_code}")
+
+            with st.spinner("Exchanging code for tokens…"):
+                # Try intuitlib first
+                try:
+                    self.auth_client.environment = "production"
+                    resp = self.auth_client.get_bearer_token(clean_code, realm_id=self.cfg.get("realm_id"))
+                    logger.debug(f"Intuitlib token response: {resp}")
+                except Exception as intuit_error:
+                    logger.warning(f"Intuitlib failed: {intuit_error}")
+                    # Fallback to direct HTTP request
+                    token_url = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer"
+                    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+                    data = {
+                        "grant_type": "authorization_code",
+                        "code": clean_code,
+                        "redirect_uri": self.cfg.get("redirect_uri", "https://zugabooks.onrender.com"),
+                        "client_id": self.cfg.get("qb_client_id"),
+                        "client_secret": self.cfg.get("qb_client_secret")
+                    }
+                    auth = (self.cfg.get("qb_client_id"), self.cfg.get("qb_client_secret"))
+                    resp = requests.post(token_url, data=data, headers=headers, auth=auth)
+                    logger.debug(f"HTTP token response: {resp.status_code}, {resp.text}")
+                    if resp.status_code != 200:
+                        st.error(f"🔴 Token request failed: HTTP {resp.status_code}, {resp.text}")
+                        logger.error(f"Token request failed: HTTP {resp.status_code}, {resp.text}")
+                        st.stop()
+                    resp = resp.json()
+
+            at = resp.get("access_token")
+            rt = resp.get("refresh_token")
+            ei = resp.get("expires_in")
+
+            if not at or not rt:
+                st.error(f"🔴 No access_token or refresh_token returned.\nFull response: `{resp}`")
+                logger.error(f"No access_token or refresh_token returned: {resp}")
+                st.stop()
+
+            st.session_state.tokens = {
+                "access_token": at,
+                "refresh_token": rt,
+                "expires_at": time.time() + (ei or 3600)
+            }
+            self.cfg.update(st.session_state.tokens)
+            realm = resp.get("realmId") or getattr(self.auth_client, "realm_id", None)
+            if realm:
+                self.cfg["realm_id"] = realm
+            save_config(self.cfg)
+            logger.info(f"Token saved to config: {st.session_state.tokens}")
+            st.success("✅ Authorization successful! Copy tokens from 'Show Current Tokens'.")
+            st.rerun()
+            return True
+        except AuthClientError as e:
+            st.error(f"🔴 QuickBooks API Error {e.status_code}:\n{e.content}")
+            logger.error(f"QuickBooks API Error {e.status_code}: {e.content}")
+            st.stop()
+        except Exception as e:
+            st.error(f"🔴 Authorization failed: {e}")
+            logger.error(f"Authorization failed: {e}")
+            st.stop()
 
     def _refresh_token(self):
         try:
@@ -317,6 +396,7 @@ def navigation_dashboard():
 
 # Main app function
 def main():
+    global token_manager
     add_custom_css()
     token_manager = QBTokenManager()
     if "username" not in st.session_state:
