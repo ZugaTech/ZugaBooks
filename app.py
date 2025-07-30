@@ -133,7 +133,6 @@ class QBTokenManager:
         if not auth_code:
             st.stop()
         try:
-            # Simulate token exchange
             with st.spinner("Processing authorization..."):
                 time.sleep(1)
                 st.session_state.tokens = {
@@ -274,27 +273,38 @@ def navigation_dashboard():
 
 # --- Main App ---
 def main():
-    # Initialize cookies
+    # Initialize cookies with retry mechanism
     if "cookies" not in st.session_state:
         st.session_state.cookies = EncryptedCookieManager(
             prefix="zugabooks",
             password=os.getenv("COOKIE_SECRET", "default-secret")
         )
-    if not st.session_state.cookies.ready():
+    max_attempts = 5
+    attempt = 0
+    while not st.session_state.cookies.ready() and attempt < max_attempts:
         st.warning("Initializing cookie manager, please wait...")
         time.sleep(1)
-        st.rerun()
+        attempt += 1
+    if not st.session_state.cookies.ready():
+        st.error("Failed to initialize cookie manager after multiple attempts.")
+        logger.error("Cookie manager initialization failed")
+        st.stop()
+
     # Initialize ConfigManager
     if config_manager is None:
         st.error("ConfigManager not initialized. Please check config.py.")
+        logger.error("ConfigManager not initialized")
         st.stop()
+
     # Maintenance Alert
     st.warning("🚧 App under maintenance and updates. Some features may be temporarily unavailable.")
+
     # Show welcome screen once
     if "welcome_shown" not in st.session_state:
         show_welcome()
         st.session_state.welcome_shown = True
         st.rerun()
+
     # Authentication flow
     if "username" not in st.session_state:
         login()
