@@ -16,15 +16,15 @@ class ConfigManager:
 
         # Default configuration
         self.default_config = {
-            "qb_client_id": "sensitive data excluded",
-            "qb_client_secret": "sensitive data excluded",
+            "qb_client_id": "",
+            "qb_client_secret": "",
             "redirect_uri": "https://zugabooks.onrender.com",
             "realm_id": "9341454953961084",
             "access_token": None,
             "refresh_token": None,
             "expires_at": 0,
             "google_sheets": {"sheet_id": "1ZVOs-WWFtfUfwrBwyMa18IFvrB_4YWZlACmFJ3ZGMV8"},
-            "version": "1.3.8"
+            "version": "2.1.0"
         }
 
         # Initialize session state config
@@ -42,6 +42,9 @@ class ConfigManager:
 
     def load_config_from_cookie(self):
         """Load config from encrypted cookie"""
+        if not self.config_cookies.ready():
+            logger.warning("Cookies not ready during load_config_from_cookie")
+            return None
         if "config" in self.config_cookies:
             try:
                 config_str = self.config_cookies["config"]
@@ -54,6 +57,9 @@ class ConfigManager:
 
     def save_config_to_cookie(self, config):
         """Save config to encrypted cookie"""
+        if not self.config_cookies.ready():
+            logger.warning("Cookies not ready during save_config_to_cookie")
+            return
         try:
             config_str = json.dumps(config)
             self.config_cookies["config"] = config_str
