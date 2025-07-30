@@ -1,5 +1,4 @@
 import streamlit as st
-# --- Streamlit Configuration ---
 st.set_page_config(
     page_title="ZugaBooks",
     page_icon="📊",
@@ -16,6 +15,7 @@ import numpy as np
 from datetime import date, timedelta
 import logging
 from streamlit_cookies_manager import EncryptedCookieManager
+from config import load_config, save_config, config_manager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -24,12 +24,9 @@ logger = logging.getLogger(__name__)
 # --- Custom CSS ---
 st.markdown("""
     <style>
-        /* Main content styling */
         .main .block-container {
             padding-top: 2rem;
         }
-        
-        /* Button styling */
         .stButton>button {
             background-color: #4CAF50;
             color: white;
@@ -41,16 +38,12 @@ st.markdown("""
             background-color: #45a049;
             transform: scale(1.05);
         }
-        
-        /* Input field styling */
         .stTextInput>div>div>input {
             border: 2px solid #ccc;
             border-radius: 4px;
             padding: 8px 12px;
             font-size: 16px;
         }
-        
-        /* Sidebar styling */
         .sidebar .sidebar-content {
             background-color: #f8f9fa;
             padding: 20px 15px;
@@ -58,15 +51,11 @@ st.markdown("""
         .sidebar .sidebar-content .stRadio>div {
             flex-direction: column;
         }
-        
-        /* Header styling */
         .header {
             padding: 1rem 0;
             border-bottom: 1px solid #eee;
             margin-bottom: 1.5rem;
         }
-        
-        /* Status indicators */
         .status-success {
             color: #4CAF50;
             font-weight: bold;
@@ -111,10 +100,6 @@ def login():
 # --- Password Gate ---
 def password_gate():
     """App-level password authentication"""
-    if not st.session_state.cookies.ready():
-        st.warning("Initializing cookie manager, please wait...")
-        time.sleep(1)
-        st.rerun()
     with st.sidebar.form("password_gate_form"):
         st.title("🔐 App Access")
         pw = st.text_input("Enter App Password", type="password", key="password_gate")
@@ -130,9 +115,28 @@ def password_gate():
                 st.error("❌ Incorrect password")
                 logger.error("Password authentication failed: incorrect password")
 
+# --- Credential Manager ---
+def credential_manager():
+    """Manage QuickBooks and Google Sheets credentials"""
+    cfg = load_config()
+    st.subheader("Integration Credentials")
+    st.markdown("Enter API tokens for external services. Sensitive data is securely stored.")
+    with st.expander("QuickBooks Integration", expanded=False):
+        qb_token = st.text_input("QuickBooks API Token", value=cfg.get("qb_client_id", ""), type="password", key="qb_token")
+        if st.button("🔗 Connect QuickBooks", key="qb_connect"):
+            cfg["qb_client_id"] = qb_token
+            save_config(cfg)
+            st.success("QuickBooks connected successfully!")
+    with st.expander("Google Sheets Integration", expanded=False):
+        gs_token = st.text_input("Google Sheets API Token", value=cfg.get("google_sheets", {}).get("sheet_id", ""), type="password", key="gs_token")
+        if st.button("🔗 Connect Google Sheets", key="gs_connect"):
+            cfg.setdefault("google_sheets", {})["sheet_id"] = gs_token
+            save_config(cfg)
+            st.success("Google Sheets connected successfully!")
+
 # --- Dashboard Page ---
 def dashboard_page():
-    st.title(f"Dashboard")
+    st.title("Dashboard")
     st.markdown(f"### Welcome back, {st.session_state['username']}!")
     st.markdown("---")
     col1, col2, col3 = st.columns(3)
@@ -212,23 +216,14 @@ def settings_page():
     st.subheader("Preferences")
     theme = st.selectbox("Theme", ["Light","Dark","System Default"], key="theme_select")
     timezone = st.selectbox("Timezone", ["UTC","EST","PST","CET"], key="timezone_select")
-    st.subheader("Credential Settings")
-    st.markdown("Sensitive data removed for security.")
-    with st.expander("QuickBooks Integration", expanded=False):
-        qb_token = st.text_input("QuickBooks API Token", type="password", key="qb_token")
-        if st.button("🔗 Connect QuickBooks", key="qb_connect"):
-            st.success("QuickBooks connected successfully!")
-    with st.expander("Google Sheets Integration", expanded=False):
-        gs_token = st.text_input("Google Sheets API Token", type="password", key="gs_token")
-        if st.button("🔗 Connect Google Sheets", key="gs_connect"):
-            st.success("Google Sheets connected successfully!")
+    credential_manager()
     if st.button("💾 Save Settings", key="save_settings"):
         st.success("Settings saved successfully!")
 
 # --- Navigation ---
 def navigation_dashboard():
     st.sidebar.title("Navigation")
-    page = st.sidebar.radio("", ["Dashboard","Reports","Settings"], key="nav=nav_radio")
+    page = st.sidebar.radio("", ["Dashboard","Reports","Settings"], key="nav_radio")
     st.sidebar.markdown("---")
     st.sidebar.markdown("### System Status")
     st.sidebar.markdown("QuickBooks: <span class='status-success'>Connected</span>", unsafe_allow_html=True)
@@ -242,11 +237,20 @@ def navigation_dashboard():
 
 # --- Main App ---
 def main():
+    # Initialize cookies
     if "cookies" not in st.session_state:
         st.session_state.cookies = EncryptedCookieManager(
             prefix="zugabooks",
             password=os.getenv("COOKIE_SECRET", "default-secret")
         )
+    if not st.session_state.cookies.ready():
+        st.warning("Initializing cookie manager, please wait...")
+        time.sleep(1)
+        st.rerun()
+    # Initialize ConfigManager
+    if config_manager is None:
+        config.config_manager = config.ConfigManager(st.session_state.cookies)
+        logger.info("ConfigManager initialized")
     # Maintenance Alert
     st.warning("🚧 App under maintenance and updates. Some features may be temporarily unavailable.")
     # Show welcome screen once
