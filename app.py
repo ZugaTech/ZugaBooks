@@ -195,10 +195,10 @@ def reports_page():
             st.subheader("Export Options")
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("📤 Export to Google Sheets"):
+                if st.button("📄 Export to Google Sheets"):
                     st.success("✅ Report exported to Google Sheets!")
             with col2:
-                st.download_button("💾 Download CSV", data=data.to_csv(index=False), file_name=f"{rpt.replace(' ','_')}_{today}.csv", mime="text/csv")
+                st.download_button("📀 Download CSV", data=data.to_csv(index=False), file_name=f"{rpt.replace(' ','_')}_{today}.csv", mime="text/csv")
 
 # --- Settings Page ---
 def settings_page():
@@ -214,7 +214,7 @@ def settings_page():
     theme = st.selectbox("Theme", ["Light","Dark","System Default"])
     timezone = st.selectbox("Timezone", ["UTC","EST","PST","CET"])
     credential_manager()
-    if st.button("💾 Save Settings"):
+    if st.button("📅 Save Settings"):
         st.success("Settings saved successfully!")
 
 # --- Navigation ---
