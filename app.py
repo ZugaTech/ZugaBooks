@@ -117,8 +117,8 @@ def password_gate():
         if st.form_submit_button("Submit"):
             if pw == os.getenv("APP_PASSWORD", "").strip():
                 st.session_state.authenticated = True
-                cookies["last_auth_ts"] = str(int(time.time()))
-                cookies.save()
+                st.session_state.cookies["last_auth_ts"] = str(int(time.time()))
+                st.session_state.cookies.save()
                 st.success("✅ Access granted — valid for 24 hours")
                 logger.info("Password authentication successful")
                 st.rerun()
