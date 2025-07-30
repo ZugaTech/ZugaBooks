@@ -8,8 +8,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class ConfigManager:
-    def __init__(self, cookie_manager):
-        self.config_cookies = cookie_manager
+    def __init__(self):
         # Default configuration
         self.default_config = {
             "qb_client_id": "",
@@ -25,8 +24,8 @@ class ConfigManager:
 
         # Initialize session state config
         if "config" not in st.session_state:
-            st.session_state.config = self.load_config_from_cookie() or self.default_config
-            logger.info("Initialized st.session_state.config with default or cookie config")
+            st.session_state.config = self.default_config.copy()
+            logger.info("Initialized st.session_state.config with default config")
         else:
             # Merge with defaults if keys are missing
             for key, value in self.default_config.items():
@@ -34,56 +33,25 @@ class ConfigManager:
                     st.session_state.config[key] = value
             logger.info("Merged existing st.session_state.config with defaults")
 
-        logger.info("Initialized in-memory ConfigManager")
-
-    def load_config_from_cookie(self):
-        """Load config from encrypted cookie"""
-        if not self.config_cookies.ready():
-            logger.warning("Cookies not ready during load_config_from_cookie")
-            return None
-        if "config" in self.config_cookies:
-            try:
-                config_str = self.config_cookies["config"]
-                config = json.loads(config_str)
-                logger.info("Loaded config from cookie")
-                return config
-            except Exception as e:
-                logger.error(f"Failed to load config from cookie: {e}")
-        return None
-
-    def save_config_to_cookie(self, config):
-        """Save config to encrypted cookie"""
-        if not self.config_cookies.ready():
-            logger.warning("Cookies not ready during save_config_to_cookie")
-            return
-        try:
-            config_str = json.dumps(config)
-            self.config_cookies["config"] = config_str
-            self.config_cookies.save()
-            logger.info("Saved config to cookie")
-        except Exception as e:
-            logger.error(f"Failed to save config to cookie: {e}")
-
     def load_config(self):
         """Return in-memory config"""
         if "config" not in st.session_state:
-            st.session_state.config = self.default_config
+            st.session_state.config = self.default_config.copy()
             logger.warning("st.session_state.config was missing, initialized with default")
         logger.info("Loaded in-memory config")
         return st.session_state.config
 
     def save_config(self, config):
-        """Save config in-memory and to cookie"""
+        """Save config in-memory"""
         if not isinstance(config, dict):
             raise ValueError("Config must be a dictionary")
         st.session_state.config = config
-        self.save_config_to_cookie(config)
-        logger.info("Config saved in-memory and to cookie")
+        logger.info("Config saved in-memory")
 
     def get(self, key, default=None):
         """Retrieve a config value"""
         if "config" not in st.session_state:
-            st.session_state.config = self.default_config
+            st.session_state.config = self.default_config.copy()
             logger.warning("st.session_state.config was missing, initialized with default")
         value = st.session_state.config.get(key, default)
         logger.debug(f"Get config key: {key}, value: {value}")
@@ -92,22 +60,17 @@ class ConfigManager:
     def set(self, key, value):
         """Set a config value"""
         if "config" not in st.session_state:
-            st.session_state.config = self.default_config
+            st.session_state.config = self.default_config.copy()
             logger.warning("st.session_state.config was missing, initialized with default")
         st.session_state.config[key] = value
-        self.save_config(st.session_state.config)
         logger.info(f"Set config key: {key} to {value}")
 
 # Singleton instance
-config_manager = None
+config_manager = ConfigManager()
 
 # Public functions
 def load_config():
-    if config_manager is None:
-        raise RuntimeError("ConfigManager not initialized")
     return config_manager.load_config()
 
 def save_config(config):
-    if config_manager is None:
-        raise RuntimeError("ConfigManager not initialized")
     config_manager.save_config(config)
