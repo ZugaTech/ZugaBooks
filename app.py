@@ -21,7 +21,7 @@ from streamlit_cookies_manager import EncryptedCookieManager
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- Custom CSS  ---
+# --- Custom CSS ---
 st.markdown("""
     <style>
         /* Main content styling */
@@ -111,6 +111,10 @@ def login():
 # --- Password Gate ---
 def password_gate():
     """App-level password authentication"""
+    if not st.session_state.cookies.ready():
+        st.warning("Initializing cookie manager, please wait...")
+        time.sleep(1)
+        st.rerun()
     with st.sidebar.form("password_gate_form"):
         st.title("🔐 App Access")
         pw = st.text_input("Enter App Password", type="password", key="password_gate")
@@ -208,13 +212,23 @@ def settings_page():
     st.subheader("Preferences")
     theme = st.selectbox("Theme", ["Light","Dark","System Default"], key="theme_select")
     timezone = st.selectbox("Timezone", ["UTC","EST","PST","CET"], key="timezone_select")
+    st.subheader("Credential Settings")
+    st.markdown("Sensitive data removed for security.")
+    with st.expander("QuickBooks Integration", expanded=False):
+        qb_token = st.text_input("QuickBooks API Token", type="password", key="qb_token")
+        if st.button("🔗 Connect QuickBooks", key="qb_connect"):
+            st.success("QuickBooks connected successfully!")
+    with st.expander("Google Sheets Integration", expanded=False):
+        gs_token = st.text_input("Google Sheets API Token", type="password", key="gs_token")
+        if st.button("🔗 Connect Google Sheets", key="gs_connect"):
+            st.success("Google Sheets connected successfully!")
     if st.button("💾 Save Settings", key="save_settings"):
         st.success("Settings saved successfully!")
 
 # --- Navigation ---
 def navigation_dashboard():
     st.sidebar.title("Navigation")
-    page = st.sidebar.radio("", ["Dashboard","Reports","Settings"], key="nav_radio")
+    page = st.sidebar.radio("", ["Dashboard","Reports","Settings"], key="nav=nav_radio")
     st.sidebar.markdown("---")
     st.sidebar.markdown("### System Status")
     st.sidebar.markdown("QuickBooks: <span class='status-success'>Connected</span>", unsafe_allow_html=True)
@@ -233,6 +247,8 @@ def main():
             prefix="zugabooks",
             password=os.getenv("COOKIE_SECRET", "default-secret")
         )
+    # Maintenance Alert
+    st.warning("🚧 App under maintenance and updates. Some features may be temporarily unavailable.")
     # Show welcome screen once
     if "welcome_shown" not in st.session_state:
         show_welcome()
