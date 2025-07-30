@@ -6,6 +6,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
 import os
 import time
 import json
@@ -85,7 +86,6 @@ users = {
 
 # --- Welcome Screen ---
 def show_welcome():
-    """Display welcome message for 3 seconds"""
     with st.empty():
         st.title("Welcome to Zuga Books")
         st.subheader("Your Financial Management Solution")
@@ -96,20 +96,11 @@ def show_welcome():
 # --- Login System ---
 def login():
     """Multi-user login system with form submission"""
-    if "login_form" not in st.session_state:
-        st.session_state.login_form = {"username": "", "password": ""}
-    
-    with st.sidebar.form("login_form", clear_on_submit=False):
+    with st.sidebar.form("login_form"):
         st.title("Login")
-        
-        # Input fields
-        username = st.text_input("Username", value=st.session_state.login_form["username"], key="login_username")
-        password = st.text_input("Password", type="password", value=st.session_state.login_form["password"], key="login_password")
-        
-        # Form submission
-        submitted = st.form_submit_button("Login")
-        if submitted:
-            st.session_state.login_form = {"username": username, "password": password}
+        username = st.text_input("Username", key="login_username")
+        password = st.text_input("Password", type="password", key="login_password")
+        if st.form_submit_button("Login"):
             if username in users and bcrypt.checkpw(password.encode(), users[username].encode()):
                 st.session_state["username"] = username
                 st.success("Logged in successfully!")
@@ -120,25 +111,14 @@ def login():
 # --- Password Gate ---
 def password_gate():
     """App-level password authentication"""
-    if "password_gate_form" not in st.session_state:
-        st.session_state.password_gate_form = {"password": ""}
-    
-    with st.sidebar.form("password_gate_form", clear_on_submit=False):
+    with st.sidebar.form("password_gate_form"):
         st.title("🔐 App Access")
-        
-        # Input field
-        pw = st.text_input("Enter App Password", type="password", 
-                          value=st.session_state.password_gate_form["password"],
-                          key="password_gate")
-        
-        # Form submission
-        submitted = st.form_submit_button("Submit")
-        if submitted:
-            st.session_state.password_gate_form = {"password": pw}
-            if pw == st.session_state.APP_PASSWORD.strip():
+        pw = st.text_input("Enter App Password", type="password", key="password_gate")
+        if st.form_submit_button("Submit"):
+            if pw == os.getenv("APP_PASSWORD", "").strip():
                 st.session_state.authenticated = True
-                st.session_state.cookies["last_auth_ts"] = str(int(time.time()))
-                st.session_state.cookies.save()
+                cookies["last_auth_ts"] = str(int(time.time()))
+                cookies.save()
                 st.success("✅ Access granted — valid for 24 hours")
                 logger.info("Password authentication successful")
                 st.rerun()
@@ -148,12 +128,9 @@ def password_gate():
 
 # --- Dashboard Page ---
 def dashboard_page():
-    """Dashboard with financial overview"""
     st.title(f"Dashboard")
     st.markdown(f"### Welcome back, {st.session_state['username']}!")
     st.markdown("---")
-    
-    # Financial summary
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("Monthly Revenue", "$12,845", "12%")
@@ -161,8 +138,6 @@ def dashboard_page():
         st.metric("Expenses", "$8,230", "-5%")
     with col3:
         st.metric("Net Profit", "$4,615", "28%")
-    
-    # Charts
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Income vs Expenses")
@@ -172,60 +147,45 @@ def dashboard_page():
             "Expenses": [8000, 9000, 8500, 8200]
         })
         st.bar_chart(data.set_index("Month"))
-    
     with col2:
         st.subheader("Profit Trend")
-        st.line_chart(data.set_index("Month")[["Income", "Expenses"]])
+        st.line_chart(data.set_index("Month")[['Income','Expenses']])
 
 # --- Reports Page ---
 def reports_page():
-    """Financial reports section"""
     st.title("Financial Reports")
     st.markdown("---")
-    
-    # Date selection
     today = date.today()
     col1, col2 = st.columns(2)
     with col1:
         start = st.date_input("Start Date", today - timedelta(days=30), key="start")
     with col2:
         end = st.date_input("End Date", today, key="end")
-    
     if start > end:
         st.error("⚠️ End date must be after start date.")
         st.stop()
-    
-    # Report selection
     rpt = st.selectbox("Select Report Type", ["Profit & Loss", "Balance Sheet", "Transaction List"], key="rpt")
-    
-    # Placeholder for report generation
     if st.button("🔄 Generate Report", key="gen"):
         with st.spinner("Compiling report data..."):
-            time.sleep(2)  # Simulate processing time
-            
-            # Mock report data
+            time.sleep(2)
             if rpt == "Profit & Loss":
                 data = pd.DataFrame({
-                    "Category": ["Revenue", "Cost of Goods", "Gross Profit", "Expenses", "Net Profit"],
-                    "Amount": [25000, 12000, 13000, 8000, 5000]
+                    "Category": ["Revenue","Cost of Goods","Gross Profit","Expenses","Net Profit"],
+                    "Amount": [25000,12000,13000,8000,5000]
                 })
             elif rpt == "Balance Sheet":
                 data = pd.DataFrame({
-                    "Account": ["Assets", "Liabilities", "Equity"],
-                    "Balance": [75000, 45000, 30000]
+                    "Account": ["Assets","Liabilities","Equity"],
+                    "Balance": [75000,45000,30000]
                 })
             else:
                 data = pd.DataFrame({
-                    "Date": [today - timedelta(days=i) for i in range(10, 0, -1)],
-                    "Description": [f"Transaction {i}" for i in range(10, 0, -1)],
-                    "Amount": [100 * i for i in range(10, 0, -1)]
+                    "Date": [today - timedelta(days=i) for i in range(10,0,-1)],
+                    "Description": [f"Transaction {i}" for i in range(10,0,-1)],
+                    "Amount": [100*i for i in range(10,0,-1)]
                 })
-            
-            # Display report
             st.subheader(f"{rpt} Report")
             st.dataframe(data, use_container_width=True, height=400)
-            
-            # Export options
             st.markdown("---")
             st.subheader("Export Options")
             col1, col2 = st.columns(2)
@@ -233,90 +193,59 @@ def reports_page():
                 if st.button("📤 Export to Google Sheets", key="exp"):
                     st.success("✅ Report exported to Google Sheets!")
             with col2:
-                st.download_button("💾 Download CSV", data=data.to_csv(index=False),
-                                    file_name=f"{rpt.replace(' ', '_')}_{today}.csv", 
-                                    mime="text/csv", key="dl")
+                st.download_button("💾 Download CSV", data=data.to_csv(index=False), file_name=f"{rpt.replace(' ','_')}_{today}.csv", mime="text/csv", key="dl")
 
 # --- Settings Page ---
 def settings_page():
-    """Application settings"""
     st.title("Settings")
     st.markdown("---")
-    
-    # Account settings
     st.subheader("Account Settings")
     col1, col2 = st.columns(2)
     with col1:
         st.text_input("Name", value="John Doe", key="user_name")
     with col2:
         st.text_input("Email", value="john@example.com", key="user_email")
-    
-    # Preferences
     st.subheader("Preferences")
-    theme = st.selectbox("Theme", ["Light", "Dark", "System Default"])
-    timezone = st.selectbox("Timezone", ["UTC", "EST", "PST", "CET"])
-    
-    # Save button
+    theme = st.selectbox("Theme", ["Light","Dark","System Default"], key="theme_select")
+    timezone = st.selectbox("Timezone", ["UTC","EST","PST","CET"], key="timezone_select")
     if st.button("💾 Save Settings", key="save_settings"):
         st.success("Settings saved successfully!")
 
 # --- Navigation ---
 def navigation_dashboard():
-    """Main navigation with direct sidebar access"""
     st.sidebar.title("Navigation")
-    
-    # Persistent navigation options
-    page = st.sidebar.radio("", ["Dashboard", "Reports", "Settings"], 
-                           key="nav_radio", label_visibility="collapsed")
-    
-    # Status indicator
+    page = st.sidebar.radio("", ["Dashboard","Reports","Settings"], key="nav_radio")
     st.sidebar.markdown("---")
     st.sidebar.markdown("### System Status")
     st.sidebar.markdown("QuickBooks: <span class='status-success'>Connected</span>", unsafe_allow_html=True)
     st.sidebar.markdown("Google Sheets: <span class='status-success'>Connected</span>", unsafe_allow_html=True)
-    
-    # App information
     st.sidebar.markdown("---")
     st.sidebar.markdown("### App Information")
     st.sidebar.markdown("**Version:** 2.1.0")
     st.sidebar.markdown("**Last Updated:** July 2025")
-    
-    # Route to selected page
-    pages = {
-        "Dashboard": dashboard_page,
-        "Reports": reports_page,
-        "Settings": settings_page,
-    }
+    pages = {"Dashboard": dashboard_page, "Reports": reports_page, "Settings": settings_page}
     pages[page]()
 
 # --- Main App ---
 def main():
-    """Main application flow"""
-    # Initialize session state variables
     if "cookies" not in st.session_state:
         st.session_state.cookies = EncryptedCookieManager(
-            prefix="zugabooks", 
+            prefix="zugabooks",
             password=os.getenv("COOKIE_SECRET", "default-secret")
         )
-    
-    if "APP_PASSWORD" not in st.session_state:
-        st.session_state.APP_PASSWORD = os.getenv("APP_PASSWORD", "default-password")
-    
-    # Show welcome screen on first load
+    # Show welcome screen once
     if "welcome_shown" not in st.session_state:
         show_welcome()
         st.session_state.welcome_shown = True
         st.rerun()
-    
     # Authentication flow
     if "username" not in st.session_state:
         login()
     else:
-        if "authenticated" not in st.session_state:
+        if not st.session_state.get("authenticated", False):
             password_gate()
         else:
             navigation_dashboard()
 
-# --- Run Application ---
 if __name__ == "__main__":
     main()
