@@ -16,8 +16,8 @@ class ConfigManager:
 
         # Default configuration
         self.default_config = {
-            "qb_client_id": "",
-            "qb_client_secret": "",
+            "qb_client_id": "sensitive data excluded",
+            "qb_client_secret": "sensitive data excluded",
             "redirect_uri": "https://zugabooks.onrender.com",
             "realm_id": "9341454953961084",
             "access_token": None,
