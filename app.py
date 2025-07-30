@@ -55,6 +55,7 @@ st.markdown("""
         }
         .status-success { color: #4CAF50; font-weight: bold; }
         .status-warning { color: #FF9800; font-weight: bold; }
+        .cookie-warning { background-color: #fff3cd; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -91,18 +92,12 @@ def login():
 # --- Password Gate ---
 def password_gate():
     """App-level password authentication"""
-    if not st.session_state.cookies.ready():
-        st.warning("Initializing cookie manager, please wait...")
-        time.sleep(1)
-        st.rerun()
     with st.sidebar.form("password_gate_form"):
         st.title("🔐 App Access")
         pw = st.text_input("Enter App Password", type="password", key="password_gate")
         if st.form_submit_button("Submit", key="password_submit"):
             if pw == os.getenv("APP_PASSWORD", "").strip():
                 st.session_state.authenticated = True
-                st.session_state.cookies["last_auth_ts"] = str(int(time.time()))
-                st.session_state.cookies.save()
                 st.success("✅ Access granted — valid for 24 hours")
                 logger.info("Password authentication successful")
                 st.rerun()
@@ -273,29 +268,6 @@ def navigation_dashboard():
 
 # --- Main App ---
 def main():
-    # Initialize cookies with retry mechanism
-    if "cookies" not in st.session_state:
-        st.session_state.cookies = EncryptedCookieManager(
-            prefix="zugabooks",
-            password=os.getenv("COOKIE_SECRET", "default-secret")
-        )
-    max_attempts = 5
-    attempt = 0
-    while not st.session_state.cookies.ready() and attempt < max_attempts:
-        st.warning("Initializing cookie manager, please wait...")
-        time.sleep(1)
-        attempt += 1
-    if not st.session_state.cookies.ready():
-        st.error("Failed to initialize cookie manager after multiple attempts.")
-        logger.error("Cookie manager initialization failed")
-        st.stop()
-
-    # Initialize ConfigManager
-    if config_manager is None:
-        st.error("ConfigManager not initialized. Please check config.py.")
-        logger.error("ConfigManager not initialized")
-        st.stop()
-
     # Maintenance Alert
     st.warning("🚧 App under maintenance and updates. Some features may be temporarily unavailable.")
 
@@ -304,6 +276,12 @@ def main():
         show_welcome()
         st.session_state.welcome_shown = True
         st.rerun()
+
+    # Initialize ConfigManager
+    if config_manager is None:
+        st.error("ConfigManager not initialized. Please check config.py.")
+        logger.error("ConfigManager not initialized")
+        st.stop()
 
     # Authentication flow
     if "username" not in st.session_state:
