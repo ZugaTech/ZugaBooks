@@ -66,18 +66,21 @@ def show_welcome():
         time.sleep(3)
     placeholder.empty()
 
-# Multi-user login system
+# Multi-user login system with form to prevent reruns
 def login():
-    st.sidebar.title("Login")
-    username = st.sidebar.text_input("Username", key="login_username")
-    password = st.sidebar.text_input("Password", type="password", key="login_password")
-    if st.sidebar.button("Login", key="login_button"):
-        if username in users and bcrypt.checkpw(password.encode(), users[username].encode()):
-            st.session_state["username"] = username
-            st.sidebar.success("Logged in successfully!")
-            st.rerun()
-        else:
-            st.sidebar.error("Invalid username or password")
+    with st.sidebar:
+        with st.form("login_form"):
+            st.title("Login")
+            username = st.text_input("Username", key="login_username")
+            password = st.text_input("Password", type="password", key="login_password")
+            submit_button = st.form_submit_button("Login")
+            if submit_button:
+                if username in users and bcrypt.checkpw(password.encode(), users[username].encode()):
+                    st.session_state["username"] = username
+                    st.success("Logged in successfully!")
+                    st.rerun()
+                else:
+                    st.error("Invalid username or password")
 
 # Cookie setup
 COOKIE_SECRET = os.getenv("COOKIE_SECRET")
@@ -98,7 +101,7 @@ if config.config_manager is None:
 else:
     logger.info("ConfigManager already initialized")
 
-# Password gate
+# Password gate with form to prevent reruns
 APP_PASSWORD = os.getenv("APP_PASSWORD")
 if not APP_PASSWORD:
     st.error("🔒 Missing APP_PASSWORD in environment variables")
@@ -106,42 +109,23 @@ if not APP_PASSWORD:
     st.stop()
 
 def password_gate():
-    last_ts = cookies.get("last_auth_ts")
-    now = int(time.time())
-    if last_ts:
-        try:
-            last_ts = int(last_ts)
-            if now - last_ts < 24 * 3600:
-                st.session_state.authenticated = True
-                logger.info("Authenticated via valid cookie timestamp")
-                return
-        except ValueError:
-            logger.warning("Invalid last_auth_ts cookie value")
-
-    if "authenticated" not in st.session_state:
-        st.session_state.authenticated = False
-
-    if st.session_state.authenticated:
-        logger.info("Already authenticated, proceeding")
-        return
-
-    st.sidebar.title("🔐 App Access")
-    pw = st.sidebar.text_input("Enter App Password", type="password", key="password_gate").strip()
-    if pw:
-        if pw == APP_PASSWORD.strip():
-            st.session_state.authenticated = True
-            cookies["last_auth_ts"] = str(now)
-            cookies.save()
-            st.sidebar.success("✅ Access granted — valid for 24 h")
-            logger.info("Password authentication successful")
-            st.rerun()
-        else:
-            st.sidebar.error("❌ Incorrect password")
-            logger.error("Password authentication failed: incorrect password")
-            st.stop()
-    else:
-        logger.info("No password entered, stopping execution")
-        st.stop()
+    with st.sidebar:
+        with st.form("password_gate_form"):
+            st.title("🔐 App Access")
+            pw = st.text_input("Enter App Password", type="password", key="password_gate").strip()
+            submit_button = st.form_submit_button("Submit")
+            if submit_button:
+                if pw == APP_PASSWORD.strip():
+                    st.session_state.authenticated = True
+                    cookies["last_auth_ts"] = str(int(time.time()))
+                    cookies.save()
+                    st.success("✅ Access granted — valid for 24 h")
+                    logger.info("Password authentication successful")
+                    st.rerun()
+                else:
+                    st.error("❌ Incorrect password")
+                    logger.error("Password authentication failed: incorrect password")
+                    st.stop()
 
 # Credential and Token Manager
 def credential_manager():
@@ -149,7 +133,7 @@ def credential_manager():
     st.sidebar.markdown("### 🔧 Credentials & Settings")
     new_cid = st.sidebar.text_input("QuickBooks Client ID", value=cfg.get("qb_client_id", ""), type="password", key="cred_qb_client_id")
     new_secret = st.sidebar.text_input("QuickBooks Client Secret", value=cfg.get("qb_client_secret", ""), type="password", key="cred_qb_client_secret")
-    new_redirect = st.sidebar.text_input("QuickBooks Redirect URI", value=cfg.get("redirect_uri", "https://zugabooks.onrender.com"), key="cred_qb_client_redirect")
+    new_redirect = st.sidebar.text_input("QuickBooks Redirect URI", value=cfg.get("redirect_uri", "https://zugabooks.onrender.com"), key="cred_qb_redirect_uri")
     new_realm = st.sidebar.text_input("QuickBooks Realm ID", value=cfg.get("realm_id", "9341454953961084"), type="password", key="cred_qb_realm_id")
     new_sheet = st.sidebar.text_input("Google Sheet ID", value=cfg.get("google_sheets", {}).get("sheet_id", "1ZVOs-WWFtfUfwrBwyMa18IFvrB_4YWZlACmFJ3ZGMV8"), key="cred_google_sheet_id")
     sa_file = st.sidebar.file_uploader("Service Account JSON", type=["json"], key="cred_sa_file_uploader")
@@ -382,10 +366,10 @@ def settings_page():
     theme = st.selectbox("Theme", ["Light", "Dark"])
     st.write(f"Selected theme: {theme}")
 
-# Navigation dashboard
+# Navigation dashboard with radio buttons
 def navigation_dashboard():
     st.sidebar.title("Navigation")
-    page = st.sidebar.selectbox("Select a page", ["Dashboard", "Reports", "Settings"])
+    page = st.sidebar.radio("Select a page", ["Dashboard", "Reports", "Settings"], key="nav_radio")
     st.info("Note: This app is under development, and some features may not be fully functional.")
     pages = {
         "Dashboard": dashboard_page,
