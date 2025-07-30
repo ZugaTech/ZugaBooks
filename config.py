@@ -10,12 +10,6 @@ logger = logging.getLogger(__name__)
 class ConfigManager:
     def __init__(self, cookie_manager):
         self.config_cookies = cookie_manager
-        if not self.config_cookies.ready():
-            logger.warning("Cookies not ready during ConfigManager init")
-            st.warning("Initializing cookie manager, please wait...")
-            time.sleep(1)
-            st.rerun()
-
         # Default configuration
         self.default_config = {
             "qb_client_id": "",
