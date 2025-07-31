@@ -174,11 +174,11 @@ def dashboard_page():
     st.markdown("---")
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Monthly Revenue", "$12,845", "12%", key="metric_revenue")
+        st.metric("Monthly Revenue", "$12,845", "12%")
     with col2:
-        st.metric("Expenses", "$8,230", "-5%", key="metric_expenses")
+        st.metric("Expenses", "$8,230", "-5%")
     with col3:
-        st.metric("Net Profit", "$4,615", "28%", key="metric_profit")
+        st.metric("Net Profit", "$4,615", "28%")
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Income vs Expenses")
@@ -187,10 +187,10 @@ def dashboard_page():
             "Income": [12000, 15000, 11000, 13000],
             "Expenses": [8000, 9000, 8500, 8200]
         })
-        st.bar_chart(data.set_index("Month"), key="chart_income_expenses")
+        st.bar_chart(data.set_index("Month"))
     with col2:
         st.subheader("Profit Trend")
-        st.line_chart(data.set_index("Month")[['Income','Expenses']], key="chart_profit_trend")
+        st.line_chart(data.set_index("Month")[['Income','Expenses']])
 
 # --- Reports Page ---
 def reports_page():
@@ -226,7 +226,7 @@ def reports_page():
                     "Amount": [100*i for i in range(10,0,-1)]
                 })
             st.subheader(f"{rpt} Report")
-            st.dataframe(data, use_container_width=True, height=400, key="report_dataframe")
+            st.dataframe(data, use_container_width=True, height=400)
             st.markdown("---")
             st.subheader("Export Options")
             col1, col2 = st.columns(2)
@@ -234,7 +234,7 @@ def reports_page():
                 if st.button("📤 Export to Google Sheets", key="report_export_gsheets"):
                     st.success("✅ Report exported to Google Sheets!")
             with col2:
-                st.download_button("💾 Download CSV", data=data.to_csv(index=False), file_name=f"{rpt.replace(' ','_')}_{today}.csv", mime="text/csv", key="report_download_csv")
+                st.download_button("💾 Download CSV", data=data.to_csv(index=False), file_name=f"{rpt.replace(' ','_')}_{today}.csv", mime="text/csv")
 
 # --- Settings Page ---
 def settings_page():
