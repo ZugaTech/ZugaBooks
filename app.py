@@ -15,7 +15,6 @@ import numpy as np
 from datetime import date, timedelta
 import logging
 import requests
-from streamlit_cookies_manager import EncryptedCookieManager
 from config import load_config, save_config, config_manager
 
 # Configure logging
@@ -55,7 +54,6 @@ st.markdown("""
         }
         .status-success { color: #4CAF50; font-weight: bold; }
         .status-warning { color: #FF9800; font-weight: bold; }
-        .cookie-warning { background-color: #fff3cd; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -77,33 +75,37 @@ def show_welcome():
 # --- Login System ---
 def login():
     """Multi-user login system with form submission"""
-    with st.sidebar.form("login_form"):
-        st.title("Login")
-        username = st.text_input("Username", key="login_username")
-        password = st.text_input("Password", type="password", key="login_password")
-        if st.form_submit_button("Login", key="login_submit"):
-            if username in users and bcrypt.checkpw(password.encode(), users[username].encode()):
-                st.session_state["username"] = username
-                st.success("Logged in successfully!")
-                st.rerun()
-            else:
-                st.error("Invalid username or password")
+    with st.sidebar:
+        with st.form("login_form"):
+            st.title("Login")
+            username = st.text_input("Username", key="login_username")
+            password = st.text_input("Password", type="password", key="login_password")
+            submitted = st.form_submit_button("Login")
+            if submitted:
+                if username in users and bcrypt.checkpw(password.encode(), users[username].encode()):
+                    st.session_state["username"] = username
+                    st.success("Logged in successfully!")
+                    st.rerun()
+                else:
+                    st.error("Invalid username or password")
 
 # --- Password Gate ---
 def password_gate():
     """App-level password authentication"""
-    with st.sidebar.form("password_gate_form"):
-        st.title("🔐 App Access")
-        pw = st.text_input("Enter App Password", type="password", key="password_gate")
-        if st.form_submit_button("Submit", key="password_submit"):
-            if pw == os.getenv("APP_PASSWORD", "").strip():
-                st.session_state.authenticated = True
-                st.success("✅ Access granted — valid for 24 hours")
-                logger.info("Password authentication successful")
-                st.rerun()
-            else:
-                st.error("❌ Incorrect password")
-                logger.error("Password authentication failed: incorrect password")
+    with st.sidebar:
+        with st.form("password_gate_form"):
+            st.title("🔐 App Access")
+            pw = st.text_input("Enter App Password", type="password", key="password_gate")
+            submitted = st.form_submit_button("Submit")
+            if submitted:
+                if pw == os.getenv("APP_PASSWORD", "").strip():
+                    st.session_state.authenticated = True
+                    st.success("✅ Access granted — valid for 24 hours")
+                    logger.info("Password authentication successful")
+                    st.rerun()
+                else:
+                    st.error("❌ Incorrect password")
+                    logger.error("Password authentication failed: incorrect password")
 
 # --- QuickBooks Authorization ---
 class QBTokenManager:
