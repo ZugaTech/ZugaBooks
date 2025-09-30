@@ -282,4 +282,6 @@ def main():
 
 if __name__ == "__main__":
     st.info("✨ **Demo Mode Active**: All data is randomly generated for demonstration purposes and does not reflect real financial information.", icon="💡")
+    st.warning("⚠️ Note: QuickBooks now provides built-in reporting. This app is maintained as a demo to showcase workflow and UI design from when it was actively in use.", icon="ℹ️")
     main()
+
