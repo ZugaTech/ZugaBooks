@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: zugabooks
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.port $PORT --server.enableCORS false
+    autoDeploy: true
