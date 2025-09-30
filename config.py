@@ -1,76 +1,68 @@
-import logging
-import json
 import streamlit as st
-from streamlit_cookies_manager import EncryptedCookieManager
+import logging
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class ConfigManager:
+    """
+    A simplified ConfigManager that uses Streamlit's session_state for in-memory
+    configuration management, perfect for a self-contained demo app.
+    """
     def __init__(self):
-        # Default configuration
+        # Default configuration, loaded once at the start.
         self.default_config = {
-            "qb_client_id": "",
-            "qb_client_secret": "",
-            "redirect_uri": "https://zugabooks.onrender.com",
-            "realm_id": "9341454953961084",
-            "access_token": None,
-            "refresh_token": None,
-            "expires_at": 0,
-            "google_sheets": {"sheet_id": "1ZVOs-WWFtfUfwrBwyMa18IFvrB_4YWZlACmFJ3ZGMV8"},
-            "version": "2.1.0"
+            "version": "2.1.0-demo",
+            "app_name": "ZugaBooks Demo",
+            "google_sheets": {"sheet_id": "demo_sheet_id_placeholder"},
+            "quickbooks": {"client_id": "demo_client_id_placeholder"}
         }
 
-        # Initialize session state config
+        # Initialize session state config if it doesn't exist.
         if "config" not in st.session_state:
             st.session_state.config = self.default_config.copy()
-            logger.info("Initialized st.session_state.config with default config")
-        else:
-            # Merge with defaults if keys are missing
-            for key, value in self.default_config.items():
-                if key not in st.session_state.config:
-                    st.session_state.config[key] = value
-            logger.info("Merged existing st.session_state.config with defaults")
+            logger.info("Initialized st.session_state.config with default demo config.")
 
     def load_config(self):
-        """Return in-memory config"""
-        if "config" not in st.session_state:
-            st.session_state.config = self.default_config.copy()
-            logger.warning("st.session_state.config was missing, initialized with default")
-        logger.info("Loaded in-memory config")
-        return st.session_state.config
+        """Returns the current in-memory configuration dictionary."""
+        return st.session_state.get("config", self.default_config.copy())
 
-    def save_config(self, config):
-        """Save config in-memory"""
-        if not isinstance(config, dict):
-            raise ValueError("Config must be a dictionary")
-        st.session_state.config = config
-        logger.info("Config saved in-memory")
+    def save_config(self, new_config):
+        """
+        Updates the in-memory configuration.
+        Args:
+            new_config (dict): The dictionary to replace the current config with.
+        """
+        if not isinstance(new_config, dict):
+            raise ValueError("Configuration must be a dictionary.")
+        st.session_state.config = new_config
+        logger.info("Configuration saved in-memory (session_state).")
 
     def get(self, key, default=None):
-        """Retrieve a config value"""
-        if "config" not in st.session_state:
-            st.session_state.config = self.default_config.copy()
-            logger.warning("st.session_state.config was missing, initialized with default")
-        value = st.session_state.config.get(key, default)
-        logger.debug(f"Get config key: {key}, value: {value}")
-        return value
+        """
+        Retrieves a specific value from the configuration.
+        Args:
+            key (str): The configuration key to retrieve.
+            default: The value to return if the key is not found.
+        Returns:
+            The value associated with the key, or the default.
+        """
+        config = self.load_config()
+        return config.get(key, default)
 
     def set(self, key, value):
-        """Set a config value"""
-        if "config" not in st.session_state:
-            st.session_state.config = self.default_config.copy()
-            logger.warning("st.session_state.config was missing, initialized with default")
-        st.session_state.config[key] = value
-        logger.info(f"Set config key: {key} to {value}")
+        """
+        Sets a specific key-value pair in the configuration.
+        Args:
+            key (str): The key to set.
+            value: The value to assign to the key.
+        """
+        config = self.load_config()
+        config[key] = value
+        self.save_config(config)
+        logger.info(f"Set config key '{key}' in-memory.")
 
-# Singleton instance
+# --- Singleton Instance ---
+# This ensures that we use the same ConfigManager instance across the app.
 config_manager = ConfigManager()
-
-# Public functions
-def load_config():
-    return config_manager.load_config()
-
-def save_config(config):
-    config_manager.save_config(config)
