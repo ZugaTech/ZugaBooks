@@ -1,28 +1,30 @@
-secret.key
+# Secrets & Environment
 .env
+*.env
+secret.key
 secrets.toml
+.secret/
+service_account.json
+
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.env
-*.env
-venv/
-.secret/
-*.log
-.DS_Store
-service_account.json
-.streamlit/cache
-
 .Python
 
-# Virtual Environment
+# Virtual Environments
 venv/
 .venv/
 env/
 
-.vscode/
+# Logs
+*.log
 
+# VS Code
+.vscode/
 
 # Streamlit
 .streamlit/
+.streamlit/cache
+
