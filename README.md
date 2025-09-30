@@ -3,6 +3,8 @@
 
 ZugaBooks is a **production-ready demonstration** of a Streamlit-powered financial reporting application. It showcases a clean, intuitive user interface for fetching financial reports, visualizing data, and managing simulated connections to services like QuickBooks Online and Google Sheets.
 
+> ⚠️ **Note:** QuickBooks now includes built-in reporting. This app is maintained as a demo version to showcase workflow and UI design from when it was actively in use.
+
 This repository is intentionally built as a **portfolio piece** for potential employers, demonstrating best practices in UI/UX design, state management, and creating robust, user-friendly applications with Streamlit.
 
 ---
@@ -30,6 +32,9 @@ This repository is intentionally built as a **portfolio piece** for potential em
 - **Deployment**: Ready for services like Streamlit Community Cloud or Render.
 
 ---
+## 🚀 How to Run on Live Server
+1. load the url - (https://zugabooks.onrender.com)
+2. use "demo" for both password and username
 
 ## 🚀 How to Run Locally
 
@@ -37,7 +42,7 @@ This demo is designed to run out-of-the-box with no external dependencies or API
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/your-username/ZugaBooks.git
+    git clone https://github.com/ZugaTech/ZugaBooks.git
     cd ZugaBooks
     ```
 
@@ -62,6 +67,7 @@ The application will open automatically in your web browser. Enjoy the demo!
 
 ## 🖼️ Screenshots
 
-*(Placeholder for app screenshots or a GIF showing the application flow)*
+<img width="3840" height="2100" alt="image" src="https://github.com/user-attachments/assets/f656f87b-8a37-4f9e-a8b1-fcfa9923d00a" />
+<img width="3840" height="2100" alt="image" src="https://github.com/user-attachments/assets/5a8be8f8-c2c8-4020-b4cd-c26bd3260fee" />
 
-![ZugaBooks Dashboard](https://raw.githubusercontent.com/zugatech/ZugaBooks/main/assets/zugabooks_dashboard.png)
+
