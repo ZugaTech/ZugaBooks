@@ -82,8 +82,7 @@ def show_welcome_screen():
         st.subheader("A Financial Reporting & Management Solution")
         st.markdown("---")
         st.info("This is an interactive, production-ready demonstration.")
-        st.balloons()
-        time.sleep(2.5)
+        time.sleep(6.5)
 
 def login_page():
     """Displays the login form in the sidebar."""
@@ -281,7 +280,7 @@ def main():
         page_map[page]()
 
 if __name__ == "__main__":
-    st.info("✨ **Demo Mode Active**: All data is randomly generated for demonstration purposes and does not reflect real financial information.", icon="💡")
-    st.warning("⚠️ Note: QuickBooks now provides built-in reporting. This app is maintained as a demo to showcase workflow and UI design from when it was actively in use.", icon="ℹ️")
+    st.info(" **Demo Mode Active**: All data is randomly generated for demonstration purposes and does not reflect real financial information.")
+    st.warning("⚠️ Note: QuickBooks now provides built-in reporting. This app is maintained as a demo to showcase workflow and UI design from when it was actively in use.")
     main()
 
