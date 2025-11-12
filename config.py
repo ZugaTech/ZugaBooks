@@ -63,6 +63,5 @@ class ConfigManager:
         self.save_config(config)
         logger.info(f"Set config key '{key}' in-memory.")
 
-# --- Singleton Instance ---
-# This ensures that we use the same ConfigManager instance across the app.
+
 config_manager = ConfigManager()
