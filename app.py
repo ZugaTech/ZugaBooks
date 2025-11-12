@@ -6,7 +6,6 @@ import time
 import bcrypt
 import logging
 
-# Local imports
 from config import config_manager
 from utils import get_mock_data
 
@@ -276,7 +275,7 @@ def main():
             st.session_state.username = ""
             st.rerun()
 
-        # Display the selected page
+        
         page_map[page]()
 
 if __name__ == "__main__":
